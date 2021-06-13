@@ -27,6 +27,7 @@ private slots:
   void connected();
   void disconnected();
   void serviceStateChanged(QLowEnergyService::ServiceState newState);
+  void characteristicChanged(const QLowEnergyCharacteristic &c, const QByteArray &value);
 
 private:
   void startDiscovering();
@@ -36,12 +37,14 @@ private:
   void setStatus(const QString &status);
   void setupTimer();
   void setConnectActionEnabled(bool enabled);
+  void handleInvalidService();
 
   QLabel *statusLabel;
   QLabel *messageLabel;
 
   enum {
     DISCONNECTED,
+    DISCONNECTING,
     CONNECTING,
     CONNECTED
   } state {DISCONNECTED};
@@ -55,6 +58,7 @@ private:
 
   QLowEnergyController *bleController {};
   QLowEnergyService *service {};
+  QLowEnergyCharacteristic writeChar;
 
   QTimer *timer;
 };

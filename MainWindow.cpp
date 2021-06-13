@@ -39,6 +39,7 @@ void MainWindow::setupTimer() {
   timer = new QTimer(this);
   timer->setInterval(1000);
   connect(timer, &QTimer::timeout, this, &MainWindow::tick);
+  timer->start();
 }
 
 void MainWindow::startDiscovering() {
@@ -53,6 +54,7 @@ void MainWindow::startDiscovering() {
 }
 
 void MainWindow::disconnect() {
+  state = DISCONNECTING;
   bleController->disconnectFromDevice();
   showMessage("Disconnecting...");
   if (bleController->state() != QLowEnergyController::ClosingState){
@@ -128,7 +130,6 @@ void MainWindow::connected() {
   bleController->discoverServices();
   setStatus("Connected (" + currentDevice->name() + ")");
   showMessage("");
-  state = CONNECTED;
 }
 
 void MainWindow::disconnected() {
@@ -153,23 +154,27 @@ void MainWindow::serviceDiscovered(const QBluetoothUuid &gatt) {
 
 void MainWindow::serviceStateChanged(QLowEnergyService::ServiceState newState) {
   if (newState != QLowEnergyService::ServiceDiscovered) return;
-  for (auto chr : service->characteristics()) {
-    auto id = chr.uuid().toUInt16();
-    if (id == 0xfe01) {
-      qDebug("Found Read Characteristic");
-    } else if (id == 0xfe02) {
-      qDebug("Found Write Characteristic");
-    }
+  connect(service, &QLowEnergyService::characteristicChanged, this, &MainWindow::characteristicChanged);
+  auto readChar = service->characteristic(QBluetoothUuid((quint16)0xfe01));
+  writeChar = service->characteristic(QBluetoothUuid((quint16)0xfe01));
+  if (!readChar.isValid() || !writeChar.isValid()) {
+    qCritical("Characteristics not found");
+    handleInvalidService();
   }
+  Q_ASSERT(readChar.isValid());
+  auto notifyConfig = readChar.descriptor(QBluetoothUuid::ClientCharacteristicConfiguration);
+  service->writeDescriptor(notifyConfig, QByteArray::fromHex("0100"));
+  state = CONNECTED;
+}
+
+void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const QByteArray &value){
+  qDebug() << "Characteristic Changed" << c.uuid() << value.toHex();
 }
 
 void MainWindow::discoveryFinished() {
   qDebug() << "Discovery Finished";
   if (!service) {
-    qCritical("No WalkingPad Service found");
-    QMessageBox::warning(this, "No WalkingPad Service", currentDevice->name() + " does not appear to be a WalkingPad. Disconnecting...");
-    showMessage("No WalkingPad Service. Disconnecting...");
-    bleController->disconnectFromDevice();
+    handleInvalidService();
   }
 }
 
@@ -190,12 +195,23 @@ void MainWindow::setStatus(const QString &status) {
 }
 
 void MainWindow::tick() {
-
+  if (state != CONNECTED) return;
+  qDebug("tick");
+  auto writeChar = service->characteristic(QBluetoothUuid((quint16)0xfe02));
+  Q_ASSERT(writeChar.isValid());
+  service->writeCharacteristic(writeChar, QByteArray::fromHex("f7a20000a2fd"));
 }
 
 void MainWindow::setConnectActionEnabled(bool enabled) {
   for (auto a : connectActions) {
     a->setEnabled(enabled);
   }
+}
+
+void MainWindow::handleInvalidService() {
+  qCritical("No WalkingPad Service found");
+  QMessageBox::warning(this, "No WalkingPad Service", currentDevice->name() + " does not appear to be a WalkingPad. Disconnecting...");
+  showMessage("No WalkingPad Service. Disconnecting...");
+  bleController->disconnectFromDevice();
 }
 
