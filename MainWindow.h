@@ -26,6 +26,7 @@ private slots:
   void connectError(QLowEnergyController::Error error);
   void connected();
   void disconnected();
+  void serviceStateChanged(QLowEnergyService::ServiceState newState);
 
 private:
   void startDiscovering();

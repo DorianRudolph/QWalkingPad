@@ -145,6 +145,21 @@ void MainWindow::serviceDiscovered(const QBluetoothUuid &gatt) {
   qDebug() << "Service discovered" << gatt;
   if (gatt.toUInt16() == 0xfe00) {
     service = bleController->createServiceObject(gatt, bleController);
+    Q_ASSERT(service->state() == QLowEnergyService::DiscoveryRequired);
+    connect(service, &QLowEnergyService::stateChanged,this, &MainWindow::serviceStateChanged);
+    service->discoverDetails();
+  }
+}
+
+void MainWindow::serviceStateChanged(QLowEnergyService::ServiceState newState) {
+  if (newState != QLowEnergyService::ServiceDiscovered) return;
+  for (auto chr : service->characteristics()) {
+    auto id = chr.uuid().toUInt16();
+    if (id == 0xfe01) {
+      qDebug("Found Read Characteristic");
+    } else if (id == 0xfe02) {
+      qDebug("Found Write Characteristic");
+    }
   }
 }
 
