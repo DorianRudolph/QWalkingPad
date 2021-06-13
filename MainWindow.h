@@ -2,8 +2,8 @@
 
 #include <QMainWindow>
 #include <QBluetoothDeviceInfo>
+#include <QBluetoothDeviceDiscoveryAgent>
 
-class QBluetoothDeviceDiscoveryAgent;
 class QBluetoothDeviceInfo;
 class QLabel;
 class QLowEnergyController;
@@ -17,16 +17,27 @@ private slots:
   void disconnect();
   void addDevice(const QBluetoothDeviceInfo &device);
   void scanFinished();
+  void scanError(QBluetoothDeviceDiscoveryAgent::Error error);
   void connectDevice();
+  void tick();
 
 private:
   void startDiscovering();
   void setupMenu();
   void scan();
+  void showMessage(const QString &message);
+  void setStatus(const QString &status);
+  void setupTimer();
+  void setConnectActionEnabled(bool enabled);
 
   QLabel *statusLabel;
+  QLabel *messageLabel;
 
-  bool connected {};
+  enum {
+    DISCONNECTED,
+    CONNECTING,
+    CONNECTED
+  } state {DISCONNECTED};
   QMenu *connectMenu;
   QAction *disconnectAction;
   QAction *scanAction;
@@ -35,5 +46,7 @@ private:
   QBluetoothDeviceDiscoveryAgent *deviceDiscoveryAgent;
 
   QLowEnergyController *bleController {};
+
+  QTimer *timer;
 };
 
