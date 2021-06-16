@@ -4,6 +4,7 @@
 #include <QBluetoothDeviceInfo>
 #include <QBluetoothDeviceDiscoveryAgent>
 #include <QLowEnergyController>
+#include "Settings.h"
 
 class QBluetoothDeviceInfo;
 class QLabel;
@@ -61,5 +62,7 @@ private:
   QLowEnergyCharacteristic writeChar;
 
   QTimer *timer;
+
+  Settings settings;
 };
 

@@ -7,9 +7,11 @@
 #include <QMessageBox>
 
 MainWindow::MainWindow() {
+  setWindowTitle("QWalkingPad");
   setupMenu();
   setupTimer();
   startDiscovering();
+  settings.setDataPath("test2");
 }
 
 void MainWindow::setupMenu() {
@@ -26,6 +28,14 @@ void MainWindow::setupMenu() {
   connect(scanAction, &QAction::triggered, this, &MainWindow::scan);
   scanAction->setDisabled(true);
   connectMenu->addAction(scanAction);
+
+  auto autoReconnectAction = new QAction("&Reconnect Automatically", this);
+  autoReconnectAction->setCheckable(true);
+  autoReconnectAction->setChecked(settings.getAutoReconnect());
+  connect(autoReconnectAction, &QAction::triggered, [this](auto checked) {
+    settings.setAutoReconnect(checked);
+  });
+  connectMenu->addAction(autoReconnectAction);
 
   connectMenu->addSeparator();
 
