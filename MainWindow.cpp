@@ -11,7 +11,7 @@
 #include <QHBoxLayout>
 #include "WalkingPad.h"
 #include <QDateTime>
-#include <QHBoxLayout>
+#include <QSlider>
 
 MainWindow::MainWindow() {
   setWindowTitle("QWalkingPad");
@@ -22,18 +22,20 @@ MainWindow::MainWindow() {
 }
 
 void MainWindow::setupLayout() {
-  auto centerWidget = new QWidget(this);
-  auto vBox = new QVBoxLayout(this);
+  centerWidget = new QWidget;
+  centerWidget->setEnabled(false);
+
+  auto vBox = new QVBoxLayout;
   centerWidget->setLayout(vBox);
   setCentralWidget(centerWidget);
-  auto groupBox = new QGroupBox("Mode", this);
+  auto groupBox = new QGroupBox("Mode");
   vBox->addWidget(groupBox);
-  auto hBox = new QHBoxLayout(this);
+  auto hBox = new QHBoxLayout;
   groupBox->setLayout(hBox);
   groupBox->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Fixed);
 
   auto addModeButton = [&](const char *label, uint8_t mode, bool checked=false) {
-    auto button = new QRadioButton(label, this);
+    auto button = new QRadioButton(label);
     modeButtons[mode] = button;
     hBox->addWidget(button);
     button->setChecked(checked);
@@ -45,6 +47,9 @@ void MainWindow::setupLayout() {
   addModeButton("Sleep", MODE_SLEEP, true);
   addModeButton("Manual", MODE_MANUAL);
   addModeButton("Auto", MODE_AUTO);
+
+  auto slider = new QSlider(this);
+  vBox->addWidget(slider);
 }
 
 void MainWindow::setupMenu() {
@@ -52,28 +57,25 @@ void MainWindow::setupMenu() {
   menuBar()->show();
   connectMenu = menuBar()->addMenu("&Connect");
 
-  disconnectAction = new QAction("&Disconnect", this);
+  disconnectAction = connectMenu->addAction("&Disconnect");
   connect(disconnectAction, &QAction::triggered, this, &MainWindow::disconnect);
   disconnectAction->setDisabled(true);
-  connectMenu->addAction(disconnectAction);
 
-  scanAction = new QAction("&Scan", this);
+  scanAction = connectMenu->addAction("&Scan");
   connect(scanAction, &QAction::triggered, this, &MainWindow::scan);
   scanAction->setDisabled(true);
-  connectMenu->addAction(scanAction);
 
-  auto autoReconnectAction = new QAction("&Reconnect Automatically", this);
+  auto autoReconnectAction = connectMenu->addAction("&Reconnect Automatically");
   autoReconnectAction->setCheckable(true);
   autoReconnectAction->setChecked(settings.getAutoReconnect());
   connect(autoReconnectAction, &QAction::triggered, [this](auto checked) {
     settings.setAutoReconnect(checked);
   });
-  connectMenu->addAction(autoReconnectAction);
 
   connectMenu->addSeparator();
 
   auto settingsMenu = menuBar()->addMenu("&Settings");
-  auto unifiedSpeed = new QAction("&Unified Speed", this);
+  auto unifiedSpeed = settingsMenu->addAction("&Unified Speed");
   unifiedSpeed->setCheckable(true);
   unifiedSpeed->setChecked(settings.getUnifiedSpeed());
   connect(unifiedSpeed, &QAction::triggered, [this](auto checked) {
@@ -81,7 +83,7 @@ void MainWindow::setupMenu() {
   });
   settingsMenu->addAction(unifiedSpeed);
 
-  auto dataPath = new QAction("Set &Data Path (" + settings.getDataPath() + ")", this);
+  auto dataPath = settingsMenu->addAction("Set &Data Path (" + settings.getDataPath() + ")");
   connect(dataPath, &QAction::triggered, [this, dataPath](){
     QFileDialog dialog(this);
     dialog.setFileMode(QFileDialog::AnyFile);
@@ -101,19 +103,17 @@ void MainWindow::setupMenu() {
       }
     }
   });
-  settingsMenu->addAction(dataPath);
 
-  auto useSystemTheme = new QAction("Use System &Theme", this);
+  auto useSystemTheme = settingsMenu->addAction("Use System &Theme");
   useSystemTheme->setCheckable(true);
   useSystemTheme->setChecked(settings.getUseSystemTheme());
   connect(useSystemTheme, &QAction::triggered, [this](auto checked) {
     settings.setUseSystemTheme(checked);
   });
-  settingsMenu->addAction(useSystemTheme);
 
-  statusLabel = new QLabel("Disconnected");
+  statusLabel = new QLabel("Disconnected", this);
   statusBar()->addPermanentWidget(statusLabel);
-  messageLabel = new QLabel("Scanning...");
+  messageLabel = new QLabel("Scanning...", this);
   statusBar()->addWidget(messageLabel);
 }
 
@@ -251,6 +251,7 @@ void MainWindow::disconnected() {
   setStatus("Disconnected");
   bleController->disconnectFromDevice();
   state = DISCONNECTED;
+  centerWidget->setEnabled(false);
   disconnectAction->setEnabled(false);
   sendQueue.clear();
   showMessage("");
@@ -279,6 +280,7 @@ void MainWindow::serviceStateChanged(QLowEnergyService::ServiceState newState) {
   auto notifyConfig = readChar.descriptor(QBluetoothUuid::ClientCharacteristicConfiguration);
   service->writeDescriptor(notifyConfig, QByteArray::fromHex("0100"));
   state = CONNECTED;
+  centerWidget->setEnabled(true);
 }
 
 void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const QByteArray &value){

@@ -78,5 +78,7 @@ private:
 
   qint64 setModeTime {}; // don't update UI directly after setting
   qint64 setSpeedTime {};
+
+  QWidget *centerWidget;
 };
 
