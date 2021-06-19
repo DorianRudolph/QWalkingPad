@@ -28,6 +28,7 @@ private slots:
   void disconnected();
   void serviceStateChanged(QLowEnergyService::ServiceState newState);
   void characteristicChanged(const QLowEnergyCharacteristic &c, const QByteArray &value);
+  void handleSend();
 
 private:
   void startDiscovering();
@@ -39,6 +40,8 @@ private:
   void setConnectActionEnabled(bool enabled);
   void handleInvalidService();
   void connectDevice();
+  void setupLayout();
+  void send(const QByteArray &msg);
 
   QLabel *statusLabel;
   QLabel *messageLabel;
@@ -61,7 +64,9 @@ private:
   QLowEnergyService *service {};
   QLowEnergyCharacteristic writeChar;
 
-  QTimer *timer;
+  QTimer *tickTimer;
+  QTimer *sendTimer;
+  QList<QByteArray> sendQueue;
 
   Settings settings;
 

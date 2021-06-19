@@ -6,13 +6,33 @@
 #include <QTimer>
 #include <QMessageBox>
 #include <QFileDialog>
+#include <QGroupBox>
+#include <QRadioButton>
+#include <QHBoxLayout>
 
 MainWindow::MainWindow() {
   setWindowTitle("QWalkingPad");
-
+  setupLayout();
   setupMenu();
   setupTimer();
   startDiscovering();
+}
+
+void MainWindow::setupLayout() {
+  auto groupBox = new QGroupBox("Mode", this);
+  auto sleep = new QRadioButton("Sleep", this);
+  sleep->setChecked(true);
+  connect(sleep, &QRadioButton::clicked, this, []{
+    qDebug("CLICKED");
+  });
+  auto radio2 = new QRadioButton("Manual", this);
+  auto radio3 = new QRadioButton("Auto", this);
+  auto hBox = new QHBoxLayout(this);
+  hBox->addWidget(sleep);
+  hBox->addWidget(radio2);
+  hBox->addWidget(radio3);
+  groupBox->setLayout(hBox);
+  setCentralWidget(groupBox);
 }
 
 void MainWindow::setupMenu() {
@@ -49,7 +69,7 @@ void MainWindow::setupMenu() {
   });
   settingsMenu->addAction(unifiedSpeed);
 
-  auto dataPath = new QAction("&Data Path (" + settings.getDataPath() + ")", this);
+  auto dataPath = new QAction("Set &Data Path (" + settings.getDataPath() + ")", this);
   connect(dataPath, &QAction::triggered, [this, dataPath](){
     QFileDialog dialog(this);
     dialog.setFileMode(QFileDialog::AnyFile);
@@ -65,13 +85,13 @@ void MainWindow::setupMenu() {
       if (!selected.empty()) {
         auto path = selected[0];
         settings.setDataPath(path);
-        dataPath->setText("&Data Path (" + path + ")");
+        dataPath->setText("Set &Data Path (" + path + ")");
       }
     }
   });
   settingsMenu->addAction(dataPath);
 
-  auto useSystemTheme = new QAction("&Use System Theme", this);
+  auto useSystemTheme = new QAction("Use System &Theme", this);
   useSystemTheme->setCheckable(true);
   useSystemTheme->setChecked(settings.getUseSystemTheme());
   connect(useSystemTheme, &QAction::triggered, [this](auto checked) {
@@ -86,10 +106,29 @@ void MainWindow::setupMenu() {
 }
 
 void MainWindow::setupTimer() {
-  timer = new QTimer(this);
-  timer->setInterval(1000);
-  connect(timer, &QTimer::timeout, this, &MainWindow::tick);
-  timer->start();
+  tickTimer = new QTimer(this);
+  tickTimer->setInterval(1000);
+  connect(tickTimer, &QTimer::timeout, this, &MainWindow::tick);
+  tickTimer->start();
+
+  // It seems the WalkingPad ignores commands if they come in too quickly
+  // So we only send one command from the queue every 50 msec
+  sendTimer = new QTimer(this);
+  sendTimer->setInterval(50);
+  connect(tickTimer, &QTimer::timeout, this, &MainWindow::handleSend);
+  sendTimer->start();
+}
+
+void MainWindow::handleSend() {
+  if (state != CONNECTED) return;
+  if (!sendQueue.empty()) {
+    service->writeCharacteristic(writeChar, sendQueue.front());
+    sendQueue.pop_front();
+  }
+}
+
+void MainWindow::send(const QByteArray &msg){
+  sendQueue.push_back(msg);
 }
 
 void MainWindow::startDiscovering() {
@@ -168,6 +207,7 @@ void MainWindow::scan() {
 
 void MainWindow::connectDevice() {
   state = CONNECTING;
+  sendQueue.clear();
   setConnectActionEnabled(false);
   disconnectAction->setEnabled(true);
   showMessage("Connecting to " + selectedDevice.name() + " ...");
@@ -199,6 +239,7 @@ void MainWindow::disconnected() {
   bleController->disconnectFromDevice();
   state = DISCONNECTED;
   disconnectAction->setEnabled(false);
+  sendQueue.clear();
   showMessage("");
 }
 
@@ -216,7 +257,7 @@ void MainWindow::serviceStateChanged(QLowEnergyService::ServiceState newState) {
   if (newState != QLowEnergyService::ServiceDiscovered) return;
   connect(service, &QLowEnergyService::characteristicChanged, this, &MainWindow::characteristicChanged);
   auto readChar = service->characteristic(QBluetoothUuid((quint16)0xfe01));
-  writeChar = service->characteristic(QBluetoothUuid((quint16)0xfe01));
+  writeChar = service->characteristic(QBluetoothUuid((quint16)0xfe02));
   if (!readChar.isValid() || !writeChar.isValid()) {
     qCritical("Characteristics not found");
     handleInvalidService();
