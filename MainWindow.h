@@ -20,7 +20,6 @@ private slots:
   void addDevice(const QBluetoothDeviceInfo &device);
   void scanFinished();
   void scanError(QBluetoothDeviceDiscoveryAgent::Error error);
-  void connectDevice();
   void tick();
   void serviceDiscovered(const QBluetoothUuid &gatt);
   void discoveryFinished();
@@ -39,6 +38,7 @@ private:
   void setupTimer();
   void setConnectActionEnabled(bool enabled);
   void handleInvalidService();
+  void connectDevice();
 
   QLabel *statusLabel;
   QLabel *messageLabel;
@@ -54,7 +54,7 @@ private:
   QAction *scanAction;
   QList<QAction*> connectActions;
   QList<QBluetoothDeviceInfo> devices;
-  QBluetoothDeviceInfo *currentDevice {};
+  QBluetoothDeviceInfo selectedDevice;
   QBluetoothDeviceDiscoveryAgent *deviceDiscoveryAgent {};
 
   QLowEnergyController *bleController {};
@@ -64,5 +64,8 @@ private:
   QTimer *timer;
 
   Settings settings;
+
+  bool autoConnected {}; //only auto connect once
+  bool connectionsEnabled {true};
 };
 

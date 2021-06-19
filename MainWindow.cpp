@@ -78,7 +78,12 @@ void MainWindow::addDevice(const QBluetoothDeviceInfo &device) {
   qDebug() << "Found" << device.name() << device.address();
   auto deviceAction = new QAction(device.name() + " (" + device.address().toString() + ")", this);
   deviceAction->setData(devices.size());
-  connect(deviceAction, &QAction::triggered, this, &MainWindow::connectDevice);
+  deviceAction->setEnabled(connectionsEnabled);
+  connect(deviceAction, &QAction::triggered, this, [this](){
+    auto action = qobject_cast<QAction*>(sender());
+    selectedDevice = devices[action->data().toInt()];
+    connectDevice();
+  });
 
   devices.append(device);
   for (auto a : connectActions) {
@@ -89,6 +94,12 @@ void MainWindow::addDevice(const QBluetoothDeviceInfo &device) {
   std::sort(connectActions.begin(), connectActions.end(), [](const auto a, const auto b) {
     return a->text() < b->text(); });
   connectMenu->addActions(connectActions);
+
+  if (!autoConnected && settings.getAutoReconnect() && device.address().toString() == settings.getLastUUID()) {
+    autoConnected = true;
+    selectedDevice = devices.back();
+    connectDevice();
+  }
 }
 
 void MainWindow::scanFinished() {
@@ -116,17 +127,15 @@ void MainWindow::scan() {
 }
 
 void MainWindow::connectDevice() {
-  auto action = qobject_cast<QAction*>(sender());
-  currentDevice = &devices[action->data().toInt()];
   state = CONNECTING;
   setConnectActionEnabled(false);
   disconnectAction->setEnabled(true);
-  showMessage("Connecting to " + currentDevice->name() + " ...");
+  showMessage("Connecting to " + selectedDevice.name() + " ...");
   if (!bleController) {
     delete bleController;
   }
   service = nullptr;
-  bleController = QLowEnergyController::createCentral(*currentDevice, this);
+  bleController = QLowEnergyController::createCentral(selectedDevice, this);
   connect(bleController, &QLowEnergyController::serviceDiscovered, this, &MainWindow::serviceDiscovered);
   connect(bleController, &QLowEnergyController::discoveryFinished, this, &MainWindow::discoveryFinished);
   connect(bleController, &QLowEnergyController::connected, this, &MainWindow::connected);
@@ -137,8 +146,9 @@ void MainWindow::connectDevice() {
 
 void MainWindow::connected() {
   qDebug("Connected");
+  settings.setLastUUID(selectedDevice.address().toString());
   bleController->discoverServices();
-  setStatus("Connected (" + currentDevice->name() + ")");
+  setStatus("Connected (" + selectedDevice.name() + ")");
   showMessage("");
 }
 
@@ -190,7 +200,7 @@ void MainWindow::discoveryFinished() {
 
 void MainWindow::connectError(QLowEnergyController::Error error) {
   auto err {bleController->errorString()};
-  qCritical() << "Error while connecting to " << currentDevice->name() << err;
+  qCritical() << "Error while connecting to " << selectedDevice.name() << err;
   showMessage("Connection error: " + err);
   QMessageBox::warning(this, "Connection Error", "Error while connecting: " + err + " ");
   disconnected();
@@ -213,6 +223,7 @@ void MainWindow::tick() {
 }
 
 void MainWindow::setConnectActionEnabled(bool enabled) {
+  connectionsEnabled = enabled;
   for (auto a : connectActions) {
     a->setEnabled(enabled);
   }
@@ -220,7 +231,7 @@ void MainWindow::setConnectActionEnabled(bool enabled) {
 
 void MainWindow::handleInvalidService() {
   qCritical("No WalkingPad Service found");
-  QMessageBox::warning(this, "No WalkingPad Service", currentDevice->name() + " does not appear to be a WalkingPad. Disconnecting...");
+  QMessageBox::warning(this, "No WalkingPad Service", selectedDevice.name() + " does not appear to be a WalkingPad. Disconnecting...");
   showMessage("No WalkingPad Service. Disconnecting...");
   bleController->disconnectFromDevice();
 }
