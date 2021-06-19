@@ -15,6 +15,7 @@ class Settings {
 public:
   SETTING(bool, AutoReconnect, true)
   SETTING(bool, UnifiedSpeed, true)
+  SETTING(bool, UseSystemTheme, true)
   SETTING(QString, LastUUID, "")
   SETTING(QString, DataPath, "")
 private:

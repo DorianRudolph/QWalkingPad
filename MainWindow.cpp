@@ -5,13 +5,14 @@
 #include <QLabel>
 #include <QTimer>
 #include <QMessageBox>
+#include <QFileDialog>
 
 MainWindow::MainWindow() {
   setWindowTitle("QWalkingPad");
+
   setupMenu();
   setupTimer();
   startDiscovering();
-  settings.setDataPath("test2");
 }
 
 void MainWindow::setupMenu() {
@@ -38,6 +39,34 @@ void MainWindow::setupMenu() {
   connectMenu->addAction(autoReconnectAction);
 
   connectMenu->addSeparator();
+
+  auto settingsMenu = menuBar()->addMenu("&Settings");
+  auto unifiedSpeed = new QAction("&Unified Speed", this);
+  unifiedSpeed->setCheckable(true);
+  unifiedSpeed->setChecked(settings.getUnifiedSpeed());
+  connect(unifiedSpeed, &QAction::triggered, [this](auto checked) {
+    settings.setUnifiedSpeed(checked);
+  });
+  settingsMenu->addAction(unifiedSpeed);
+
+  auto dataPath = new QAction("&Data Path (" + settings.getDataPath() + ")", this);
+  connect(dataPath, &QAction::triggered, [this, dataPath](){
+    QFileDialog dialog(this);
+    dialog.setFileMode(QFileDialog::AnyFile);
+    dialog.setNameFilter("CSV (*.csv)");
+    if (dialog.exec()){
+      qDebug() << "Selected File" << dialog.selectedFiles();
+    }
+  });
+  settingsMenu->addAction(dataPath);
+
+  auto useSystemTheme = new QAction("&Use System Theme", this);
+  useSystemTheme->setCheckable(true);
+  useSystemTheme->setChecked(settings.getUseSystemTheme());
+  connect(useSystemTheme, &QAction::triggered, [this](auto checked) {
+    settings.setUseSystemTheme(checked);
+  });
+  settingsMenu->addAction(useSystemTheme);
 
   statusLabel = new QLabel("Disconnected");
   statusBar()->addPermanentWidget(statusLabel);

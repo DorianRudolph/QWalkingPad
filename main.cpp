@@ -4,13 +4,16 @@
 #include <QLoggingCategory>
 
 int main(int argc, char *argv[]) {
-  QApplication::setStyle(QStyleFactory::create("Fusion"));
-
   QLoggingCategory::setFilterRules(QStringLiteral("qt.bluetooth* = true"));
 
   QCoreApplication::setOrganizationName("Dorian Rudolph");
   QCoreApplication::setOrganizationDomain("dorianrudolph.com");
   QCoreApplication::setApplicationName("QWalkingPad");
+
+  if (!Settings().getUseSystemTheme()) {
+    QApplication::setStyle(QStyleFactory::create("Fusion"));
+    QIcon::setThemeName("Fusion");
+  }
 
   QApplication a(argc, argv);
   MainWindow win;
