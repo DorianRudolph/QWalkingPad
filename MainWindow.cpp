@@ -54,8 +54,19 @@ void MainWindow::setupMenu() {
     QFileDialog dialog(this);
     dialog.setFileMode(QFileDialog::AnyFile);
     dialog.setNameFilter("CSV (*.csv)");
+    dialog.setDefaultSuffix("csv");
+    dialog.setWindowTitle("Select CSV Data File Path");
+    auto dir = QFileInfo(settings.getDataPath()).absoluteDir();
+    if (dir.exists()) {
+      dialog.setDirectory(dir);
+    }
     if (dialog.exec()){
-      qDebug() << "Selected File" << dialog.selectedFiles();
+      auto selected = dialog.selectedFiles();
+      if (!selected.empty()) {
+        auto path = selected[0];
+        settings.setDataPath(path);
+        dataPath->setText("&Data Path (" + path + ")");
+      }
     }
   });
   settingsMenu->addAction(dataPath);
