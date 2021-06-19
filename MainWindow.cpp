@@ -9,6 +9,9 @@
 #include <QGroupBox>
 #include <QRadioButton>
 #include <QHBoxLayout>
+#include "WalkingPad.h"
+#include <QDateTime>
+#include <QHBoxLayout>
 
 MainWindow::MainWindow() {
   setWindowTitle("QWalkingPad");
@@ -19,20 +22,29 @@ MainWindow::MainWindow() {
 }
 
 void MainWindow::setupLayout() {
+  auto centerWidget = new QWidget(this);
+  auto vBox = new QVBoxLayout(this);
+  centerWidget->setLayout(vBox);
+  setCentralWidget(centerWidget);
   auto groupBox = new QGroupBox("Mode", this);
-  auto sleep = new QRadioButton("Sleep", this);
-  sleep->setChecked(true);
-  connect(sleep, &QRadioButton::clicked, this, []{
-    qDebug("CLICKED");
-  });
-  auto radio2 = new QRadioButton("Manual", this);
-  auto radio3 = new QRadioButton("Auto", this);
+  vBox->addWidget(groupBox);
   auto hBox = new QHBoxLayout(this);
-  hBox->addWidget(sleep);
-  hBox->addWidget(radio2);
-  hBox->addWidget(radio3);
   groupBox->setLayout(hBox);
-  setCentralWidget(groupBox);
+  groupBox->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Fixed);
+
+  auto addModeButton = [&](const char *label, uint8_t mode, bool checked=false) {
+    auto button = new QRadioButton(label, this);
+    modeButtons[mode] = button;
+    hBox->addWidget(button);
+    button->setChecked(checked);
+    connect(button, &QRadioButton::clicked, this, [this, mode]{
+      setModeTime = QDateTime::currentMSecsSinceEpoch();
+      send(setMode(mode));
+    });
+  };
+  addModeButton("Sleep", MODE_SLEEP, true);
+  addModeButton("Manual", MODE_MANUAL);
+  addModeButton("Auto", MODE_AUTO);
 }
 
 void MainWindow::setupMenu() {
@@ -123,6 +135,7 @@ void MainWindow::handleSend() {
   if (state != CONNECTED) return;
   if (!sendQueue.empty()) {
     service->writeCharacteristic(writeChar, sendQueue.front());
+    qDebug() << "SEND" << sendQueue.front().toHex();
     sendQueue.pop_front();
   }
 }
@@ -269,7 +282,21 @@ void MainWindow::serviceStateChanged(QLowEnergyService::ServiceState newState) {
 }
 
 void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const QByteArray &value){
-  qDebug() << "Characteristic Changed" << c.uuid() << value.toHex();
+  if (c.uuid().toUInt16() != 0xfe01) return;
+  qDebug() << "Characteristic Changed" << c.uuid() << value.toHex(' ');
+  auto parsed = parseMessage(value);
+  if (auto info = std::get_if<PadInfo>(&parsed)) {
+    qDebug("Info state %u, speed %u, mode %u, time %u, distance %u, steps %u", info->state, info->speed, info->mode, info->time, info->distance, info->steps);
+    if (info->mode < 3 && (QDateTime::currentSecsSinceEpoch() - setModeTime) > 1500) {
+      modeButtons[info->mode]->setChecked(true);
+    }
+  } else if (auto params = std::get_if<PadParams>(&parsed)) {
+    qDebug() << "Params";
+  } else if (auto record = std::get_if<PadRecord>(&parsed)) {
+    qDebug() << "Record";
+  } else {
+    qWarning() << "Unknown Message" << value.toHex();
+  }
 }
 
 void MainWindow::discoveryFinished() {
@@ -297,10 +324,9 @@ void MainWindow::setStatus(const QString &status) {
 
 void MainWindow::tick() {
   if (state != CONNECTED) return;
-  qDebug("tick");
-  auto writeChar = service->characteristic(QBluetoothUuid((quint16)0xfe02));
-  Q_ASSERT(writeChar.isValid());
-  service->writeCharacteristic(writeChar, QByteArray::fromHex("f7a20000a2fd"));
+  send(query());
+  //qDebug("tick");
+  //service->writeCharacteristic(writeChar, QByteArray::fromHex("f7a20000a2fd"));
 }
 
 void MainWindow::setConnectActionEnabled(bool enabled) {

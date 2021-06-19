@@ -1,5 +1,6 @@
 #pragma once
 #include <QByteArray>
+#include <variant>
 
 constexpr const uint8_t MODE_AUTO = 0;
 constexpr const uint8_t MODE_MANUAL = 1;
@@ -22,7 +23,7 @@ QByteArray messageByte(uint8_t k, uint8_t v);
 QByteArray messageInt(uint8_t k, uint32_t v);
 QByteArray query();
 QByteArray queryParams();
-QByteArray setSpeed(uint8_t speed); // hm/h
+QByteArray setSpeed(uint8_t speed); // 0.1 km/h
 QByteArray setStartSpeed(uint8_t speed);
 QByteArray setMode(uint8_t mode);
 QByteArray start();
@@ -35,6 +36,37 @@ QByteArray setUnit(uint8_t unit);
 QByteArray setLock(uint8_t enable);
 QByteArray setDisplayInfo(uint8_t info);
 
-inline constexpr unsigned char operator "" _uchar( unsigned long long arg ) noexcept {
-  return static_cast< unsigned char >( arg );
-}
+struct PadInfo {
+  uint8_t state;
+  uint8_t speed;
+  uint8_t mode;
+  uint32_t time;
+  uint32_t distance; // 10 m
+  uint32_t steps;
+};
+
+struct PadParams {
+  uint8_t goalType;
+  uint32_t goal;
+  uint8_t regulate; // calibrate?
+  uint8_t maxSpeed;
+  uint8_t startSpeed;
+  uint8_t startMode; // autoStart?
+  uint8_t sensitivity;
+  uint8_t display;
+  uint8_t lock;
+  uint8_t unit;
+};
+
+struct PadRecord {
+  uint32_t onTime;
+  uint32_t startTime;
+  uint32_t duration;
+  uint32_t distance;
+  uint32_t steps;
+  uint8_t remainingRecords;
+};
+
+typedef std::variant<PadInfo, PadParams, PadRecord> PadMessage;
+
+PadMessage parseMessage(const QByteArray& m);

@@ -9,6 +9,7 @@
 class QBluetoothDeviceInfo;
 class QLabel;
 class QLowEnergyController;
+class QRadioButton;
 
 class MainWindow : public QMainWindow {
   Q_OBJECT
@@ -60,6 +61,8 @@ private:
   QBluetoothDeviceInfo selectedDevice;
   QBluetoothDeviceDiscoveryAgent *deviceDiscoveryAgent {};
 
+  QList<QRadioButton*> modeButtons {nullptr, nullptr, nullptr};
+
   QLowEnergyController *bleController {};
   QLowEnergyService *service {};
   QLowEnergyCharacteristic writeChar;
@@ -72,5 +75,8 @@ private:
 
   bool autoConnected {}; //only auto connect once
   bool connectionsEnabled {true};
+
+  qint64 setModeTime {}; // don't update UI directly after setting
+  qint64 setSpeedTime {};
 };
 
