@@ -15,6 +15,7 @@
 #include "AbsoluteSliderStyle.h"
 #include <QPushButton>
 #include <QFontDatabase>
+#include <QActionGroup>
 
 MainWindow::MainWindow() {
   setWindowTitle("QWalkingPad");
@@ -200,15 +201,29 @@ void MainWindow::setupMenu() {
     }
   });
 
-  auto useSystemTheme = settingsMenu->addAction("Use System &Theme");
+  auto useSystemTheme = settingsMenu->addAction("Use S&ystem Theme");
   useSystemTheme->setCheckable(true);
   useSystemTheme->setChecked(settings.getUseSystemTheme());
   connect(useSystemTheme, &QAction::triggered, [this](auto checked) {
     settings.setUseSystemTheme(checked);
   });
 
-  //settingsMenu->addSection("Show Statistics");
-
+  settingsMenu->addSection("Show Statistics");
+  auto statisticsGroup = new QActionGroup(this);
+  auto showStatistics = settings.getShowStatistics();
+  auto addStatisticsAction = [=](const char *label, int setting){
+    auto action = settingsMenu->addAction(label);
+    action->setCheckable(true);
+    statisticsGroup->addAction(action);
+    connect(action, &QAction::triggered, this, [=]() {
+      settings.setShowStatistics(setting);
+      updateStatsLabel();
+    });
+    if (setting == showStatistics) action->setChecked(true);
+  };
+  addStatisticsAction("&Today", Settings::TODAY);
+  addStatisticsAction("&All time", Settings::ALL_TIME);
+  addStatisticsAction("&Current run", Settings::CURRENT_RUN);
 
   statusLabel = new QLabel("Disconnected", this);
   statusBar()->addPermanentWidget(statusLabel);
@@ -473,7 +488,13 @@ void MainWindow::handleInvalidService() {
 }
 
 void MainWindow::updateStatsLabel() {
-  auto dat = currentData + stats.today();
+  auto dat = currentData;
+  auto addStats = settings.getShowStatistics();
+  if (addStats == Settings::ALL_TIME) {
+    dat += stats.allTime();
+  } else if (addStats == Settings::TODAY) {
+    dat += stats.today();
+  }
   constexpr auto w = 8;
   statsLabel->setText(QString("%1  km/h\n"
                               "%2  time\n"

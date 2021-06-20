@@ -30,6 +30,14 @@ Statistics::Data Statistics::today() {
   return dat;
 }
 
+Statistics::Data Statistics::allTime() {
+  Data dat{};
+  for (const auto &stat : stats) {
+    dat += stat.data;
+  }
+  return dat;
+}
+
 static bool parseStat(const QByteArray &line, Statistics::Stat &stat) {
   auto split = line.trimmed().split(',');
   if (split.size() != 4 || !(stat.date = QDateTime::fromString(split[0].trimmed(), Qt::ISODate)).isValid()) {
@@ -80,7 +88,7 @@ void Statistics::load(const QString &path) {
     } else {
       Stat stat;
       if (parseStat(line, stat)) {
-        addStat(stat);
+        stats.push_back(stat);
       } else {
         goto readError;
       }

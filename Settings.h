@@ -13,11 +13,15 @@
   }
 class Settings {
 public:
+  enum Statistics {
+    TODAY, ALL_TIME, CURRENT_RUN
+  };
   SETTING(bool, AutoReconnect, true)
   SETTING(bool, UnifiedSpeed, true)
   SETTING(bool, UseSystemTheme, true)
   SETTING(QString, LastUUID, "")
   SETTING(QString, DataPath, "")
+  SETTING(int, ShowStatistics, TODAY)
 private:
   QSettings settings;
 };

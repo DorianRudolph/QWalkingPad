@@ -31,6 +31,7 @@ public:
   void load(const QString &path);
   void changePath(const QString &path);
   Data today();
+  Data allTime();
   bool hasFile();
 
 private:
