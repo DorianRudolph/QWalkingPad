@@ -1,5 +1,7 @@
 #include "WalkingPad.h"
 
+namespace Pad {
+
 QByteArray messageByte(uint8_t k, uint8_t v) {
   uint8_t data[]{0xf7, 0xa2, k, v, uint8_t(0xa2 + k + v), 0xfd};
   return QByteArray(reinterpret_cast<char *>(data), sizeof(data));
@@ -72,13 +74,13 @@ static uint32_t parseInt(const uint8_t *m, int i) {
   return (m[i] << 16) | (m[i + 1] << 8) | m[i + 2];
 }
 
-PadMessage parseMessage(const QByteArray &message) {
-  PadMessage parsed;
+Message parseMessage(const QByteArray &message) {
+  Message parsed;
   auto m = reinterpret_cast<const uint8_t *>(message.constData());
   auto sz = message.size();
   auto typ = m[1];
   if (typ == 0xa2 && sz >= 15) {
-    parsed = PadInfo {
+    parsed = Info{
         .state = uint8_t(m[2]),
         .speed = uint8_t(m[3]),
         .mode = uint8_t(m[4]),
@@ -87,7 +89,7 @@ PadMessage parseMessage(const QByteArray &message) {
         .steps = parseInt(m, 11),
     };
   } else if (typ == 0xa6 && sz >= 14) {
-    parsed = PadParams {
+    parsed = Params{
         .goalType = m[2],
         .goal = parseInt(m, 3),
         .regulate = m[6],
@@ -100,7 +102,7 @@ PadMessage parseMessage(const QByteArray &message) {
         .unit = m[13],
     };
   } else if (typ == 0xa7 && sz >= 18) {
-    parsed = PadRecord {
+    parsed = Record{
         .onTime = parseInt(m, 2),
         .startTime = parseInt(m, 5),
         .duration = parseInt(m, 8),
@@ -110,4 +112,6 @@ PadMessage parseMessage(const QByteArray &message) {
     };
   }
   return parsed;
+}
+
 }

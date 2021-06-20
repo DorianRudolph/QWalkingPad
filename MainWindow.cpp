@@ -13,6 +13,7 @@
 #include <QDateTime>
 #include <QSlider>
 #include "AbsoluteSliderStyle.h"
+#include <QPushButton>
 
 MainWindow::MainWindow() {
   setWindowTitle("QWalkingPad");
@@ -27,9 +28,6 @@ QSlider * MainWindow::makeSpeedSlider() {
   slider->setFixedHeight(25);
   slider->setStyle(new AbsoluteSliderStyle(slider->style()));
   slider->setRange(0, 60); // TODO handle different maximum speeds
-  connect(slider, &QSlider::sliderMoved, this, [=](int speed){
-    setSpeedWidgets(speed);
-  });
   slider->setTickInterval(10);
   slider->setTickPosition(QSlider::TicksBelow);
   return slider;
@@ -55,44 +53,67 @@ void MainWindow::setupLayout() {
     button->setChecked(checked);
     connect(button, &QRadioButton::clicked, this, [this, mode]{
       setModeTime = QDateTime::currentMSecsSinceEpoch();
-      send(setMode(mode));
+      send(Pad::setMode(mode));
     });
   };
-  addModeButton("Sleep", MODE_SLEEP, true);
-  addModeButton("Manual", MODE_MANUAL);
-  addModeButton("Auto", MODE_AUTO);
+  addModeButton("Sleep", Pad::MODE_SLEEP, true);
+  addModeButton("Manual", Pad::MODE_MANUAL);
+  addModeButton("Auto", Pad::MODE_AUTO);
 
-  auto gridWidget = new QWidget;
+  auto speedGroup = new QGroupBox("Speed");
+  speedGroup->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Fixed);
+
   auto grid = new QGridLayout;
-  gridWidget->setLayout(grid);
-  vBox->addWidget(gridWidget);
+  speedGroup->setLayout(grid);
+  vBox->addWidget(speedGroup);
 
   speedLabel = new QLabel;
-  grid->addWidget(speedLabel, 0, 0, Qt::AlignTop);
+  grid->addWidget(new QLabel("Current:"), 0, 0, Qt::AlignTop);
+  grid->addWidget(speedLabel, 0, 1, Qt::AlignTop);
 
   speedSlider = makeSpeedSlider();
   connect(speedSlider, &QSlider::sliderReleased, this, [=](){
+    auto speed = speedSlider->sliderPosition();
     setSpeedTime = QDateTime::currentMSecsSinceEpoch();
-    send(setSpeed(speedSlider->sliderPosition()));
+    setSpeedWidgets(speed);
+    send(Pad::setSpeed(speed));
   });
-  grid->addWidget(speedSlider, 0, 1);
+  connect(speedSlider, &QSlider::sliderMoved, this, &MainWindow::setSpeedWidgets);
+  grid->addWidget(speedSlider, 0, 2);
   setSpeedWidgets(0);
 
   startSpeedLabel = new QLabel;
-  grid->addWidget(startSpeedLabel, 1, 0, Qt::AlignTop);
+  grid->addWidget(new QLabel("Start:"), 1, 0, Qt::AlignTop);
+  grid->addWidget(startSpeedLabel, 1, 1, Qt::AlignTop);
 
   startSpeedSlider = makeSpeedSlider();
-  grid->addWidget(startSpeedSlider, 1, 1);
+  grid->addWidget(startSpeedSlider, 1, 2);
+  connect(startSpeedSlider, &QSlider::sliderReleased, this, [=](){
+    auto speed = startSpeedSlider->sliderPosition();
+    setStartSpeedWidgets(speed);
+    send(Pad::setStartSpeed(speed));
+    if (settings.getUnifiedSpeed()){
+      send(Pad::setSpeed(speed));
+    }
+  });
+  connect(startSpeedSlider, &QSlider::sliderMoved, this, &MainWindow::setStartSpeedWidgets);
+  setStartSpeedWidgets(20);
+
+  startButton = new QPushButton("Start");
+  connect(startButton, &QPushButton::pressed, this, [=](){ send(Pad::start()); });
+  grid->addWidget(startButton, 2, 0, 1, 2);
 }
+
 
 void MainWindow::setSpeedWidgets(int speed) {
   speedSlider->setSliderPosition(speed);
-  speedLabel->setText(QString("Speed: %1.%2 km/h").arg(speed/10).arg(speed % 10));
+  speedLabel->setText(QString("%1 km/h").arg(speed/10., 0, 'f', 1));
 }
 
 void MainWindow::setStartSpeedWidgets(int speed) {
-  speedSlider->setSliderPosition(speed);
-  speedLabel->setText(QString("Start Speed: %1.%2 km/h").arg(speed/10).arg(speed % 10));
+  speed = std::max(speed, 5);
+  startSpeedSlider->setSliderPosition(speed);
+  startSpeedLabel->setText(QString("%1 km/h").arg(speed/10., 0, 'f', 1));
 }
 
 void MainWindow::setupMenu() {
@@ -118,7 +139,7 @@ void MainWindow::setupMenu() {
   connectMenu->addSeparator();
 
   auto settingsMenu = menuBar()->addMenu("&Settings");
-  auto unifiedSpeed = settingsMenu->addAction("&Update Speed with Start Speed");
+  auto unifiedSpeed = settingsMenu->addAction("&Unified Speed");
   unifiedSpeed->setCheckable(true);
   unifiedSpeed->setChecked(settings.getUnifiedSpeed());
   connect(unifiedSpeed, &QAction::triggered, [this](auto checked) {
@@ -324,14 +345,16 @@ void MainWindow::serviceStateChanged(QLowEnergyService::ServiceState newState) {
   service->writeDescriptor(notifyConfig, QByteArray::fromHex("0100"));
   state = CONNECTED;
   centerWidget->setEnabled(true);
+  queriedParams = false;
 }
 
 void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const QByteArray &value){
   if (c.uuid().toUInt16() != 0xfe01) return;
   qDebug() << "Characteristic Changed" << c.uuid() << value.toHex(' ');
+  using namespace Pad;
   auto parsed = parseMessage(value);
-  if (auto info = std::get_if<PadInfo>(&parsed)) {
-    qDebug("Info state %u, speed %u, mode %u, time %u, distance %u, steps %u", info->state, info->speed, info->mode, info->time, info->distance, info->steps);
+  if (auto info = std::get_if<Info>(&parsed)) {
+    qDebug("Info: state %u, speed %u, mode %u, time %u, distance %u, steps %u", info->state, info->speed, info->mode, info->time, info->distance, info->steps);
     auto time = QDateTime::currentMSecsSinceEpoch();
     if (info->mode < 3 && (time - setModeTime) > 1000) {
       modeButtons[info->mode]->setChecked(true);
@@ -339,9 +362,12 @@ void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const 
     if ((time - setSpeedTime) > 1000 && !speedSlider->isSliderDown()) {
       setSpeedWidgets(info->speed);
     }
-  } else if (auto params = std::get_if<PadParams>(&parsed)) {
-    qDebug() << "Params";
-  } else if (auto record = std::get_if<PadRecord>(&parsed)) {
+    startButton->setText(info->state ? "Stop" : "Start");
+  } else if (auto params = std::get_if<Params>(&parsed)) {
+    qDebug("Params: goalType %u, goal %u, regulate %u, maxSpeed %u, startSpeed %u, startMode %u, sensitivity %u, display %x, lock %u, unit %u", params->goalType, params->goal, params->regulate, params->maxSpeed, params->startSpeed, params->startMode, params->sensitivity, params->display, params->lock, params->unit);
+    queriedParams = true; // only query params once
+    setStartSpeedWidgets(params->startSpeed);
+  } else if (auto record = std::get_if<Record>(&parsed)) {
     qDebug() << "Record";
   } else {
     qWarning() << "Unknown Message" << value.toHex();
@@ -373,9 +399,9 @@ void MainWindow::setStatus(const QString &status) {
 
 void MainWindow::tick() {
   if (state != CONNECTED) return;
-  send(query());
-  //qDebug("tick");
-  //service->writeCharacteristic(writeChar, QByteArray::fromHex("f7a20000a2fd"));
+  send(Pad::query());
+  if (!queriedParams)
+    send(Pad::queryParams());
 }
 
 void MainWindow::setConnectActionEnabled(bool enabled) {

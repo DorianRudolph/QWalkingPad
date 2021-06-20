@@ -11,6 +11,7 @@ class QLabel;
 class QLowEnergyController;
 class QRadioButton;
 class QSlider;
+class QPushButton;
 
 class MainWindow : public QMainWindow {
   Q_OBJECT
@@ -31,6 +32,8 @@ private slots:
   void serviceStateChanged(QLowEnergyService::ServiceState newState);
   void characteristicChanged(const QLowEnergyCharacteristic &c, const QByteArray &value);
   void handleSend();
+  void setSpeedWidgets(int speed);
+  void setStartSpeedWidgets(int speed);
 
 private:
   void startDiscovering();
@@ -44,8 +47,6 @@ private:
   void connectDevice();
   void setupLayout();
   void send(const QByteArray &msg);
-  void setSpeedWidgets(int speed);
-  void setStartSpeedWidgets(int speed);
   QSlider *makeSpeedSlider();
 
   QLabel *statusLabel;
@@ -89,5 +90,8 @@ private:
   QLabel *speedLabel;
   QSlider *startSpeedSlider;
   QLabel *startSpeedLabel;
+  QPushButton *startButton;
+
+  bool queriedParams {};
 };
 

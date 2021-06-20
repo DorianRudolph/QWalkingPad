@@ -2,6 +2,8 @@
 #include <QByteArray>
 #include <variant>
 
+namespace Pad {
+
 constexpr const uint8_t MODE_AUTO = 0;
 constexpr const uint8_t MODE_MANUAL = 1;
 constexpr const uint8_t MODE_SLEEP = 2;
@@ -36,7 +38,7 @@ QByteArray setUnit(uint8_t unit);
 QByteArray setLock(uint8_t enable);
 QByteArray setDisplayInfo(uint8_t info);
 
-struct PadInfo {
+struct Info {
   uint8_t state;
   uint8_t speed;
   uint8_t mode;
@@ -45,7 +47,7 @@ struct PadInfo {
   uint32_t steps;
 };
 
-struct PadParams {
+struct Params {
   uint8_t goalType;
   uint32_t goal;
   uint8_t regulate; // calibrate?
@@ -58,7 +60,7 @@ struct PadParams {
   uint8_t unit;
 };
 
-struct PadRecord {
+struct Record {
   uint32_t onTime;
   uint32_t startTime;
   uint32_t duration;
@@ -67,6 +69,7 @@ struct PadRecord {
   uint8_t remainingRecords;
 };
 
-typedef std::variant<PadInfo, PadParams, PadRecord> PadMessage;
+typedef std::variant<Info, Params, Record> Message;
 
-PadMessage parseMessage(const QByteArray& m);
+Message parseMessage(const QByteArray& m);
+}
