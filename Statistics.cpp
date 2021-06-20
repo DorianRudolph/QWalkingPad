@@ -1,5 +1,4 @@
 #include "Statistics.h"
-#include <QFile>
 #include <QLoggingCategory>
 #include "Protocol.h"
 

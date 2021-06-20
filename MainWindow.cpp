@@ -14,6 +14,7 @@
 #include <QSlider>
 #include "AbsoluteSliderStyle.h"
 #include <QPushButton>
+#include <QFontDatabase>
 
 MainWindow::MainWindow() {
   setWindowTitle("QWalkingPad");
@@ -21,6 +22,16 @@ MainWindow::MainWindow() {
   setupMenu();
   setupTimer();
   startDiscovering();
+}
+
+void MainWindow::showEvent(QShowEvent *event) {
+  auto path = settings.getDataPath();
+  if(!path.isEmpty()) {
+    stats.load(path);
+    if (!stats.hasFile()) {
+      QMessageBox::warning(this, "Failed to load statistics", "Failed to parse file " + settings.getDataPath());
+    }
+  }
 }
 
 QSlider * MainWindow::makeSpeedSlider() {
@@ -38,13 +49,14 @@ void MainWindow::setupLayout() {
   centerWidget->setEnabled(false);
 
   auto vBox = new QVBoxLayout;
+  vBox->setAlignment(Qt::AlignTop);
   centerWidget->setLayout(vBox);
   setCentralWidget(centerWidget);
-  auto groupBox = new QGroupBox("Mode");
-  vBox->addWidget(groupBox);
+  auto modeGroup = new QGroupBox("Mode");
+  vBox->addWidget(modeGroup);
   auto hBox = new QHBoxLayout;
-  groupBox->setLayout(hBox);
-  groupBox->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Fixed);
+  modeGroup->setLayout(hBox);
+  modeGroup->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Fixed);
 
   auto addModeButton = [&](const char *label, uint8_t mode, bool checked=false) {
     auto button = new QRadioButton(label);
@@ -102,6 +114,19 @@ void MainWindow::setupLayout() {
   startButton = new QPushButton("Start");
   connect(startButton, &QPushButton::pressed, this, [=](){ send(Pad::start()); });
   grid->addWidget(startButton, 2, 0, 1, 2);
+
+  auto statsGroup = new QGroupBox("Statistics");
+  statsGroup->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Fixed);
+  vBox->addWidget(statsGroup);
+  auto statsLayout = new QGridLayout;
+  //statsLayout->setAlignment(Qt::AlignCenter);
+  statsGroup->setLayout(statsLayout);
+  QFont font("monospace", 20);
+  font.setFixedPitch(true);
+  statsLabel = new QLabel;
+  statsLabel->setFont(font);
+  statsLayout->addWidget(statsLabel, 0, 0, Qt::AlignCenter);
+  updateStatsLabel();
 }
 
 
@@ -164,6 +189,12 @@ void MainWindow::setupMenu() {
         auto path = selected[0];
         settings.setDataPath(path);
         dataPath->setText("Set &Data Path (" + path + ")");
+        if(!path.isEmpty()) {
+          stats.changePath(path);
+          if (!stats.hasFile()) {
+            QMessageBox::warning(this, "Failed to load statistics", "Failed to parse file " + settings.getDataPath());
+          }
+        }
       }
     }
   });
@@ -361,7 +392,13 @@ void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const 
     if ((time - setSpeedTime) > 1000 && !speedSlider->isSliderDown()) {
       setSpeedWidgets(info->speed);
     }
-    startButton->setText(info->state ? "Stop" : "Start");
+    currentSpeed = info->speed;
+    currentData.distance = info->distance * 10;
+    currentData.duration = info->time;
+    currentData.steps = info->steps;
+    updateStatsLabel();
+    auto s = info->state;
+    startButton->setText(s == 0 || s == 5 ? "Start" : "Stop");
   } else if (auto params = std::get_if<Params>(&parsed)) {
     qDebug("Params: goalType %u, goal %u, regulate %u, maxSpeed %u, startSpeed %u, startMode %u, sensitivity %u, display %x, lock %u, unit %u", params->goalType, params->goal, params->regulate, params->maxSpeed, params->startSpeed, params->startMode, params->sensitivity, params->display, params->lock, params->unit);
     queriedParams = true; // only query params once
@@ -415,5 +452,15 @@ void MainWindow::handleInvalidService() {
   QMessageBox::warning(this, "No WalkingPad Service", selectedDevice.name() + " does not appear to be a WalkingPad. Disconnecting...");
   showMessage("No WalkingPad Service. Disconnecting...");
   bleController->disconnectFromDevice();
+}
+
+void MainWindow::updateStatsLabel() {
+  auto dat = currentData + stats.today();
+  constexpr auto w = 8;
+  statsLabel->setText(QString("%4\n%1  km/h\n%2  steps\n%3  km")
+    .arg(currentSpeed/10., w, 'f', 1)
+    .arg(dat.steps, w)
+    .arg(dat.distance/1000., w, 'f', 2)
+    .arg(QTime::fromMSecsSinceStartOfDay(dat.duration).toString("hh:mm:ss"), w));
 }
 

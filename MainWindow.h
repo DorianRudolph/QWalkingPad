@@ -5,6 +5,7 @@
 #include <QBluetoothDeviceDiscoveryAgent>
 #include <QLowEnergyController>
 #include "Settings.h"
+#include "Statistics.h"
 
 class QBluetoothDeviceInfo;
 class QLabel;
@@ -17,6 +18,9 @@ class MainWindow : public QMainWindow {
   Q_OBJECT
 public:
   MainWindow();
+
+protected:
+  void showEvent(QShowEvent *event) override;
 
 private slots:
   void disconnect();
@@ -48,6 +52,7 @@ private:
   void setupLayout();
   void send(const QByteArray &msg);
   QSlider *makeSpeedSlider();
+  void updateStatsLabel();
 
   QLabel *statusLabel;
   QLabel *messageLabel;
@@ -93,5 +98,10 @@ private:
   QPushButton *startButton;
 
   bool queriedParams {};
+
+  Pad::Statistics::Data currentData {};
+  Pad::Statistics stats {};
+  int currentSpeed {};
+  QLabel *statsLabel;
 };
 

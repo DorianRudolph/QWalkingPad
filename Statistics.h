@@ -1,10 +1,10 @@
 #pragma once
 #include <QDateTime>
 #include <QList>
+#include <QFile>
 #include <memory>
 
 class QString;
-class QFile;
 
 namespace Pad {
 
