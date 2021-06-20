@@ -19,6 +19,9 @@ class MainWindow : public QMainWindow {
 public:
   MainWindow();
 
+public slots:
+  void receivedMessage(int instanceId, QByteArray message);
+
 protected:
   void showEvent(QShowEvent *event) override;
 

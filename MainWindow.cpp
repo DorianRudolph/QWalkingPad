@@ -249,7 +249,7 @@ void MainWindow::handleSend() {
   if (state != CONNECTED) return;
   if (!sendQueue.empty()) {
     service->writeCharacteristic(writeChar, sendQueue.front());
-    qDebug() << "SEND" << sendQueue.front().toHex();
+    //qDebug() << "SEND" << sendQueue.front().toHex();
     sendQueue.pop_front();
   }
 }
@@ -400,11 +400,11 @@ void MainWindow::serviceStateChanged(QLowEnergyService::ServiceState newState) {
 
 void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const QByteArray &value){
   if (c.uuid().toUInt16() != 0xfe01) return;
-  qDebug() << "Characteristic Changed" << c.uuid() << value.toHex(' ');
+  //qDebug() << "Characteristic Changed" << c.uuid() << value.toHex(' ');
   using namespace Pad;
   auto parsed = parseMessage(value);
   if (auto info = std::get_if<Info>(&parsed)) {
-    qDebug("Info: state %u, speed %u, mode %u, time %u, distance %u, steps %u", info->state, info->speed, info->mode, info->time, info->distance, info->steps);
+    //qDebug("Info: state %u, speed %u, mode %u, time %u, distance %u, steps %u", info->state, info->speed, info->mode, info->time, info->distance, info->steps);
     auto time = QDateTime::currentMSecsSinceEpoch();
     if (info->mode < 3 && (time - setModeTime) > 1000) {
       modeButtons[info->mode]->setChecked(true);
@@ -420,11 +420,11 @@ void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const 
     auto s = info->state;
     startButton->setText(s == 0 || s == 5 ? "Start" : "Stop");
   } else if (auto params = std::get_if<Params>(&parsed)) {
-    qDebug("Params: goalType %u, goal %u, regulate %u, maxSpeed %u, startSpeed %u, startMode %u, sensitivity %u, display %x, lock %u, unit %u", params->goalType, params->goal, params->regulate, params->maxSpeed, params->startSpeed, params->startMode, params->sensitivity, params->display, params->lock, params->unit);
+    //qDebug("Params: goalType %u, goal %u, regulate %u, maxSpeed %u, startSpeed %u, startMode %u, sensitivity %u, display %x, lock %u, unit %u", params->goalType, params->goal, params->regulate, params->maxSpeed, params->startSpeed, params->startMode, params->sensitivity, params->display, params->lock, params->unit);
     queriedParams = true; // only query params once
     setStartSpeedWidgets(params->startSpeed);
   } else if (auto record = std::get_if<Record>(&parsed)) {
-    qDebug("Record: onTime %u, startTime %u, duration %u, distance %u, steps %u, remaining %u", record->onTime, record->startTime, record->duration, record->distance, record->steps, record->remainingRecords);
+    //qDebug("Record: onTime %u, startTime %u, duration %u, distance %u, steps %u, remaining %u", record->onTime, record->startTime, record->duration, record->distance, record->steps, record->remainingRecords);
     remainingRecords = record->remainingRecords;
     if (record->duration) {
       stats.addRecord(*record);
@@ -504,5 +504,28 @@ void MainWindow::updateStatsLabel() {
     .arg(QTime::fromMSecsSinceStartOfDay(dat.duration * 1000).toString("hh:mm:ss"), w)
     .arg(dat.steps, w)
     .arg(dat.distance/1000., w, 'f', 2));
+}
+
+void MainWindow::receivedMessage(int instanceId, QByteArray message) {
+  if (state != CONNECTED) return;
+  auto args = message.split(' ');
+  if (args.empty()) return;
+  auto cmd = args[0];
+  if (cmd == "start") {
+    send(Pad::start());
+  } else {
+    if (args.size() < 2) return;
+    bool ok;
+    int val = args[1].toInt(&ok);
+    if (!ok) return;
+    if (cmd == "setSpeed" && val >= 0 && val <= 60) { //TODO max speed
+      send(Pad::setSpeed(val));
+    } else if (cmd == "addSpeed") {
+      auto speed = currentSpeed + val;
+      if (speed >= 0 && speed <= 60) {
+        send(Pad::setSpeed(speed));
+      }
+    }
+  }
 }
 

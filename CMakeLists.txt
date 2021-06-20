@@ -12,5 +12,9 @@ set(REQUIRED_LIBS_QUALIFIED Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Bluetooth)
 
 add_executable(${PROJECT_NAME} main.cpp MainWindow.cpp Protocol.cpp Statistics.cpp)
 
+set(QAPPLICATION_CLASS QApplication CACHE STRING "Inheritance class for SingleApplication")
+add_subdirectory(singleapplication)
+target_link_libraries(${PROJECT_NAME} SingleApplication::SingleApplication)
+
 find_package(Qt${QT_VERSION} COMPONENTS ${REQUIRED_LIBS} REQUIRED)
 target_link_libraries(${PROJECT_NAME} ${REQUIRED_LIBS_QUALIFIED})
