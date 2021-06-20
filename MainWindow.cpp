@@ -12,6 +12,7 @@
 #include "WalkingPad.h"
 #include <QDateTime>
 #include <QSlider>
+#include "AbsoluteSliderStyle.h"
 
 MainWindow::MainWindow() {
   setWindowTitle("QWalkingPad");
@@ -19,6 +20,19 @@ MainWindow::MainWindow() {
   setupMenu();
   setupTimer();
   startDiscovering();
+}
+
+QSlider * MainWindow::makeSpeedSlider() {
+  auto slider = new QSlider(Qt::Orientation::Horizontal);
+  slider->setFixedHeight(25);
+  slider->setStyle(new AbsoluteSliderStyle(slider->style()));
+  slider->setRange(0, 60); // TODO handle different maximum speeds
+  connect(slider, &QSlider::sliderMoved, this, [=](int speed){
+    setSpeedWidgets(speed);
+  });
+  slider->setTickInterval(10);
+  slider->setTickPosition(QSlider::TicksBelow);
+  return slider;
 }
 
 void MainWindow::setupLayout() {
@@ -48,8 +62,37 @@ void MainWindow::setupLayout() {
   addModeButton("Manual", MODE_MANUAL);
   addModeButton("Auto", MODE_AUTO);
 
-  auto slider = new QSlider(this);
-  vBox->addWidget(slider);
+  auto gridWidget = new QWidget;
+  auto grid = new QGridLayout;
+  gridWidget->setLayout(grid);
+  vBox->addWidget(gridWidget);
+
+  speedLabel = new QLabel;
+  grid->addWidget(speedLabel, 0, 0, Qt::AlignTop);
+
+  speedSlider = makeSpeedSlider();
+  connect(speedSlider, &QSlider::sliderReleased, this, [=](){
+    setSpeedTime = QDateTime::currentMSecsSinceEpoch();
+    send(setSpeed(speedSlider->sliderPosition()));
+  });
+  grid->addWidget(speedSlider, 0, 1);
+  setSpeedWidgets(0);
+
+  startSpeedLabel = new QLabel;
+  grid->addWidget(startSpeedLabel, 1, 0, Qt::AlignTop);
+
+  startSpeedSlider = makeSpeedSlider();
+  grid->addWidget(startSpeedSlider, 1, 1);
+}
+
+void MainWindow::setSpeedWidgets(int speed) {
+  speedSlider->setSliderPosition(speed);
+  speedLabel->setText(QString("Speed: %1.%2 km/h").arg(speed/10).arg(speed % 10));
+}
+
+void MainWindow::setStartSpeedWidgets(int speed) {
+  speedSlider->setSliderPosition(speed);
+  speedLabel->setText(QString("Start Speed: %1.%2 km/h").arg(speed/10).arg(speed % 10));
 }
 
 void MainWindow::setupMenu() {
@@ -75,7 +118,7 @@ void MainWindow::setupMenu() {
   connectMenu->addSeparator();
 
   auto settingsMenu = menuBar()->addMenu("&Settings");
-  auto unifiedSpeed = settingsMenu->addAction("&Unified Speed");
+  auto unifiedSpeed = settingsMenu->addAction("&Update Speed with Start Speed");
   unifiedSpeed->setCheckable(true);
   unifiedSpeed->setChecked(settings.getUnifiedSpeed());
   connect(unifiedSpeed, &QAction::triggered, [this](auto checked) {
@@ -127,7 +170,7 @@ void MainWindow::setupTimer() {
   // So we only send one command from the queue every 50 msec
   sendTimer = new QTimer(this);
   sendTimer->setInterval(50);
-  connect(tickTimer, &QTimer::timeout, this, &MainWindow::handleSend);
+  connect(sendTimer, &QTimer::timeout, this, &MainWindow::handleSend);
   sendTimer->start();
 }
 
@@ -289,8 +332,12 @@ void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const 
   auto parsed = parseMessage(value);
   if (auto info = std::get_if<PadInfo>(&parsed)) {
     qDebug("Info state %u, speed %u, mode %u, time %u, distance %u, steps %u", info->state, info->speed, info->mode, info->time, info->distance, info->steps);
-    if (info->mode < 3 && (QDateTime::currentSecsSinceEpoch() - setModeTime) > 1500) {
+    auto time = QDateTime::currentMSecsSinceEpoch();
+    if (info->mode < 3 && (time - setModeTime) > 1000) {
       modeButtons[info->mode]->setChecked(true);
+    }
+    if ((time - setSpeedTime) > 1000 && !speedSlider->isSliderDown()) {
+      setSpeedWidgets(info->speed);
     }
   } else if (auto params = std::get_if<PadParams>(&parsed)) {
     qDebug() << "Params";

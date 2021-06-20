@@ -10,6 +10,7 @@ class QBluetoothDeviceInfo;
 class QLabel;
 class QLowEnergyController;
 class QRadioButton;
+class QSlider;
 
 class MainWindow : public QMainWindow {
   Q_OBJECT
@@ -43,6 +44,9 @@ private:
   void connectDevice();
   void setupLayout();
   void send(const QByteArray &msg);
+  void setSpeedWidgets(int speed);
+  void setStartSpeedWidgets(int speed);
+  QSlider *makeSpeedSlider();
 
   QLabel *statusLabel;
   QLabel *messageLabel;
@@ -80,5 +84,10 @@ private:
   qint64 setSpeedTime {};
 
   QWidget *centerWidget;
+
+  QSlider *speedSlider;
+  QLabel *speedLabel;
+  QSlider *startSpeedSlider;
+  QLabel *startSpeedLabel;
 };
 
