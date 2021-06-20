@@ -1,4 +1,4 @@
-#include "WalkingPad.h"
+#include "Protocol.h"
 
 namespace Pad {
 

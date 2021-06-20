@@ -9,7 +9,7 @@
 #include <QGroupBox>
 #include <QRadioButton>
 #include <QHBoxLayout>
-#include "WalkingPad.h"
+#include "Protocol.h"
 #include <QDateTime>
 #include <QSlider>
 #include "AbsoluteSliderStyle.h"
@@ -340,7 +340,6 @@ void MainWindow::serviceStateChanged(QLowEnergyService::ServiceState newState) {
     qCritical("Characteristics not found");
     handleInvalidService();
   }
-  Q_ASSERT(readChar.isValid());
   auto notifyConfig = readChar.descriptor(QBluetoothUuid::ClientCharacteristicConfiguration);
   service->writeDescriptor(notifyConfig, QByteArray::fromHex("0100"));
   state = CONNECTED;
