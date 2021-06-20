@@ -32,8 +32,7 @@ Statistics::Data Statistics::today() {
 
 static bool parseStat(const QByteArray &line, Statistics::Stat &stat) {
   auto split = line.trimmed().split(',');
-  if (split.size() != 4) return false;
-  if (!(stat.date = QDateTime::fromString(split[0].trimmed(), Qt::ISODate)).isValid()) {
+  if (split.size() != 4 || !(stat.date = QDateTime::fromString(split[0].trimmed(), Qt::ISODate)).isValid()) {
     return false;
   }
 
@@ -75,6 +74,7 @@ void Statistics::load(const QString &path) {
       file->write("\n");
       line.append('\n');
     }
+    if (line == "\n") continue;
     if (lineNo++ == 0) {
       if (line != HEADER) goto readError;
     } else {
@@ -86,7 +86,7 @@ void Statistics::load(const QString &path) {
       }
     }
   }
-  return;
+  if (lineNo) return;
 
   readError:
   stats.clear();
@@ -101,7 +101,7 @@ bool Statistics::hasFile() {
 void Statistics::addStat(const Stat &stat) {
   stats.push_back(stat);
   if (file != nullptr) {
-    file->write(stringifyStat(stat));
+    writeStat(stat);
   }
 }
 
@@ -118,13 +118,18 @@ void Statistics::changePath(const QString &path) {
   }
   file->write(HEADER);
   for (const auto &stat : stats) {
-    file->write(stringifyStat(stat));
+    writeStat(stat);
   }
+}
+
+void Statistics::writeStat(const Statistics::Stat &stat) {
+  file->write(stringifyStat(stat));
+  file->flush();
 }
 
 Statistics::Stat Statistics::Stat::fromRecord(const Record &record) {
   return {
-      .date = QDateTime::currentDateTime().addMSecs(record.startTime - record.onTime),
+      .date = QDateTime::currentDateTime().addMSecs((qint64)record.startTime - (qint64)record.onTime),
       .data = {
           .duration = static_cast<int>(record.duration),
           .distance = static_cast<int>(record.distance * 10),

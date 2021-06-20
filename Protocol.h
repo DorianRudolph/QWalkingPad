@@ -60,6 +60,9 @@ struct Params {
   uint8_t unit;
 };
 
+// it seems to only count time when the pad is actually running (since powering on),
+// so the intervals describes by records are immediately consecutive
+// TODO is this really correct???
 struct Record {
   uint32_t onTime;
   uint32_t startTime;

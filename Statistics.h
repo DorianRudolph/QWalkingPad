@@ -35,6 +35,7 @@ public:
 
 private:
   void addStat(const Stat &stat);
+  void writeStat(const Stat &stat);
 
   QList<Stat> stats;
   std::unique_ptr<QFile> file;

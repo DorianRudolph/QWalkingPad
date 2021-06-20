@@ -103,5 +103,9 @@ private:
   Pad::Statistics stats {};
   int currentSpeed {};
   QLabel *statsLabel;
+
+  bool retrievingRecords {};
+  uint8_t remainingRecords {};
+  qint64 retrievingRecordsTime {};
 };
 

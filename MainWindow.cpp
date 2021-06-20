@@ -31,6 +31,7 @@ void MainWindow::showEvent(QShowEvent *event) {
     if (!stats.hasFile()) {
       QMessageBox::warning(this, "Failed to load statistics", "Failed to parse file " + settings.getDataPath());
     }
+    updateStatsLabel();
   }
 }
 
@@ -206,6 +207,9 @@ void MainWindow::setupMenu() {
     settings.setUseSystemTheme(checked);
   });
 
+  //settingsMenu->addSection("Show Statistics");
+
+
   statusLabel = new QLabel("Disconnected", this);
   statusBar()->addPermanentWidget(statusLabel);
   messageLabel = new QLabel("Scanning...", this);
@@ -376,6 +380,7 @@ void MainWindow::serviceStateChanged(QLowEnergyService::ServiceState newState) {
   state = CONNECTED;
   centerWidget->setEnabled(true);
   queriedParams = false;
+  retrievingRecords = false;
 }
 
 void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const QByteArray &value){
@@ -404,7 +409,16 @@ void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const 
     queriedParams = true; // only query params once
     setStartSpeedWidgets(params->startSpeed);
   } else if (auto record = std::get_if<Record>(&parsed)) {
-    qDebug() << "Record";
+    qDebug("Record: onTime %u, startTime %u, duration %u, distance %u, steps %u, remaining %u", record->onTime, record->startTime, record->duration, record->distance, record->steps, record->remainingRecords);
+    remainingRecords = record->remainingRecords;
+    if (record->duration) {
+      stats.addRecord(*record);
+      retrievingRecords = true;
+      retrievingRecordsTime = QDateTime::currentMSecsSinceEpoch();
+      send(syncRecord(remainingRecords));
+    } else {
+      retrievingRecords = false;
+    }
   } else {
     qWarning() << "Unknown Message" << value.toHex();
   }
@@ -438,6 +452,10 @@ void MainWindow::tick() {
   send(Pad::query());
   if (!queriedParams)
     send(Pad::queryParams());
+  if (retrievingRecords && (QDateTime::currentMSecsSinceEpoch() - retrievingRecordsTime > 5000))
+    retrievingRecords = false;
+  if (!retrievingRecords)
+    send(Pad::syncRecord(255));
 }
 
 void MainWindow::setConnectActionEnabled(bool enabled) {
@@ -457,10 +475,13 @@ void MainWindow::handleInvalidService() {
 void MainWindow::updateStatsLabel() {
   auto dat = currentData + stats.today();
   constexpr auto w = 8;
-  statsLabel->setText(QString("%4\n%1  km/h\n%2  steps\n%3  km")
+  statsLabel->setText(QString("%1  km/h\n"
+                              "%2  time\n"
+                              "%3  steps\n"
+                              "%4  km")
     .arg(currentSpeed/10., w, 'f', 1)
+    .arg(QTime::fromMSecsSinceStartOfDay(dat.duration * 1000).toString("hh:mm:ss"), w)
     .arg(dat.steps, w)
-    .arg(dat.distance/1000., w, 'f', 2)
-    .arg(QTime::fromMSecsSinceStartOfDay(dat.duration).toString("hh:mm:ss"), w));
+    .arg(dat.distance/1000., w, 'f', 2));
 }
 
