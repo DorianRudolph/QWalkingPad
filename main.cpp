@@ -14,7 +14,6 @@ int main(int argc, char *argv[]) {
 
   if (app.isPrimary()) {
     if (argc > 1) return 1;
-    qDebug() << QIcon::themeName();
     if (!Settings().getUseSystemTheme())
       QApplication::setStyle(QStyleFactory::create("fusion"));
     MainWindow win;
