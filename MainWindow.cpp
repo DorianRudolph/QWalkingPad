@@ -43,6 +43,9 @@ QSlider * MainWindow::makeSpeedSlider() {
   slider->setRange(0, 60); // TODO handle different maximum speeds
   slider->setTickInterval(10);
   slider->setTickPosition(QSlider::TicksBelow);
+  slider->setTracking(false);
+  slider->setPageStep(5);
+  slider->setSingleStep(1);
   return slider;
 }
 
@@ -86,8 +89,7 @@ void MainWindow::setupLayout() {
   grid->addWidget(speedLabel, 0, 1, Qt::AlignTop);
 
   speedSlider = makeSpeedSlider();
-  connect(speedSlider, &QSlider::sliderReleased, this, [=](){
-    auto speed = speedSlider->sliderPosition();
+  connect(speedSlider, &QSlider::valueChanged, this, [=](auto speed){
     setSpeedTime = QDateTime::currentMSecsSinceEpoch();
     setSpeedWidgets(speed);
     send(Pad::setSpeed(speed));
@@ -102,8 +104,7 @@ void MainWindow::setupLayout() {
 
   startSpeedSlider = makeSpeedSlider();
   grid->addWidget(startSpeedSlider, 1, 2);
-  connect(startSpeedSlider, &QSlider::sliderReleased, this, [=](){
-    auto speed = startSpeedSlider->sliderPosition();
+  connect(startSpeedSlider, &QSlider::valueChanged, this, [=](auto speed){
     setStartSpeedWidgets(speed);
     send(Pad::setStartSpeed(speed));
     if (settings.getUnifiedSpeed()){
@@ -410,7 +411,8 @@ void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const 
       modeButtons[info->mode]->setChecked(true);
     }
     if ((time - setSpeedTime) > 1000 && !speedSlider->isSliderDown()) {
-      setSpeedWidgets(info->speed);
+      if (!speedSlider->isSliderDown())
+        setSpeedWidgets(info->speed);
     }
     currentSpeed = info->speed;
     currentData.distance = info->distance * 10;

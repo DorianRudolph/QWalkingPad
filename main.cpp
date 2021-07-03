@@ -10,15 +10,13 @@ int main(int argc, char *argv[]) {
   QCoreApplication::setOrganizationDomain("dorianrudolph.com");
   QCoreApplication::setApplicationName("QWalkingPad");
 
-  if (argc == 1 && !Settings().getUseSystemTheme()) {
-    QApplication::setStyle(QStyleFactory::create("Fusion"));
-    QIcon::setThemeName("Fusion");
-  }
-
   SingleApplication app(argc, argv, true);
 
   if (app.isPrimary()) {
     if (argc > 1) return 1;
+    qDebug() << QIcon::themeName();
+    if (!Settings().getUseSystemTheme())
+      QApplication::setStyle(QStyleFactory::create("fusion"));
     MainWindow win;
     QObject::connect(&app, &SingleApplication::receivedMessage, &win, &MainWindow::receivedMessage);
     win.show();
