@@ -523,10 +523,19 @@ void MainWindow::receivedMessage(int instanceId, QByteArray message) {
     if (cmd == "setSpeed" && val >= 0 && val <= 60) { //TODO max speed
       send(Pad::setSpeed(val));
     } else if (cmd == "addSpeed") {
-      auto speed = currentSpeed + val;
+      auto now = QDateTime::currentMSecsSinceEpoch();
+      qDebug("RelativeSetSpeed %d; RelativeSetTime %lld; now %lld", relativeSetSpeed, relativeSetTime, now);
+      if ((now - relativeSetTime) > 5000) {
+        relativeSetSpeed = currentSpeed;
+        qDebug() << "Timeout";
+      }
+      auto speed = relativeSetSpeed + val;
       if (speed >= 0 && speed <= 60) {
+        relativeSetSpeed = speed;
+        qDebug("Speed %d", relativeSetSpeed);
         send(Pad::setSpeed(speed));
       }
+      relativeSetTime = now;
     }
   }
 }

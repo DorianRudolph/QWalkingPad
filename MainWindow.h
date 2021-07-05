@@ -110,5 +110,8 @@ private:
   bool retrievingRecords {};
   uint8_t remainingRecords {};
   qint64 retrievingRecordsTime {};
+
+  int relativeSetSpeed;
+  qint64 relativeSetTime {};
 };
 
