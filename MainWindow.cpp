@@ -115,7 +115,7 @@ void MainWindow::setupLayout() {
   setStartSpeedWidgets(20);
 
   startButton = new QPushButton("Start");
-  connect(startButton, &QPushButton::pressed, this, [=](){ send(Pad::start()); });
+  connect(startButton, &QPushButton::pressed, this, [=](){ sendStart(); });
   grid->addWidget(startButton, 2, 0, 1, 2);
 
   auto statsGroup = new QGroupBox("Statistics");
@@ -399,6 +399,12 @@ void MainWindow::serviceStateChanged(QLowEnergyService::ServiceState newState) {
   retrievingRecords = false;
 }
 
+void MainWindow::sendStart() {
+  send(Pad::start());
+  relativeSetTime = QDateTime::currentMSecsSinceEpoch();
+  relativeSetSpeed = startSpeedSlider->sliderPosition();
+}
+
 void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const QByteArray &value){
   if (c.uuid().toUInt16() != 0xfe01) return;
   //qDebug() << "Characteristic Changed" << c.uuid() << value.toHex(' ');
@@ -514,7 +520,7 @@ void MainWindow::receivedMessage(int instanceId, QByteArray message) {
   if (args.empty()) return;
   auto cmd = args[0];
   if (cmd == "start") {
-    send(Pad::start());
+    sendStart();
   } else {
     if (args.size() < 2) return;
     bool ok;
@@ -524,15 +530,12 @@ void MainWindow::receivedMessage(int instanceId, QByteArray message) {
       send(Pad::setSpeed(val));
     } else if (cmd == "addSpeed") {
       auto now = QDateTime::currentMSecsSinceEpoch();
-      qDebug("RelativeSetSpeed %d; RelativeSetTime %lld; now %lld", relativeSetSpeed, relativeSetTime, now);
       if ((now - relativeSetTime) > 5000) {
         relativeSetSpeed = currentSpeed;
-        qDebug() << "Timeout";
       }
       auto speed = relativeSetSpeed + val;
       if (speed >= 0 && speed <= 60) {
         relativeSetSpeed = speed;
-        qDebug("Speed %d", relativeSetSpeed);
         send(Pad::setSpeed(speed));
       }
       relativeSetTime = now;

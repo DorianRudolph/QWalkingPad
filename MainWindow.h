@@ -56,6 +56,7 @@ private:
   void send(const QByteArray &msg);
   QSlider *makeSpeedSlider();
   void updateStatsLabel();
+  void sendStart();
 
   QLabel *statusLabel;
   QLabel *messageLabel;
