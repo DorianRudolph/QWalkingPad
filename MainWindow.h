@@ -114,5 +114,7 @@ private:
 
   int relativeSetSpeed;
   qint64 relativeSetTime {};
+
+  int maxSpeed {60};
 };
 

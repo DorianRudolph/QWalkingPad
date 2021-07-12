@@ -40,7 +40,7 @@ QSlider * MainWindow::makeSpeedSlider() {
   auto slider = new QSlider(Qt::Orientation::Horizontal);
   slider->setFixedHeight(25);
   slider->setStyle(new AbsoluteSliderStyle(slider->style()));
-  slider->setRange(0, 60); // TODO handle different maximum speeds
+  slider->setRange(0, maxSpeed); // TODO handle different maximum speeds
   slider->setTickInterval(10);
   slider->setTickPosition(QSlider::TicksBelow);
   slider->setTracking(false);
@@ -431,6 +431,10 @@ void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const 
     //qDebug("Params: goalType %u, goal %u, regulate %u, maxSpeed %u, startSpeed %u, startMode %u, sensitivity %u, display %x, lock %u, unit %u", params->goalType, params->goal, params->regulate, params->maxSpeed, params->startSpeed, params->startMode, params->sensitivity, params->display, params->lock, params->unit);
     queriedParams = true; // only query params once
     setStartSpeedWidgets(params->startSpeed);
+
+    maxSpeed = params->maxSpeed;
+    startSpeedSlider->setMaximum(maxSpeed);
+    speedSlider->setMaximum(maxSpeed);
   } else if (auto record = std::get_if<Record>(&parsed)) {
     //qDebug("Record: onTime %u, startTime %u, duration %u, distance %u, steps %u, remaining %u", record->onTime, record->startTime, record->duration, record->distance, record->steps, record->remainingRecords);
     remainingRecords = record->remainingRecords;
@@ -526,7 +530,7 @@ void MainWindow::receivedMessage(int instanceId, QByteArray message) {
     bool ok;
     int val = args[1].toInt(&ok);
     if (!ok) return;
-    if (cmd == "setSpeed" && val >= 0 && val <= 60) { //TODO max speed
+    if (cmd == "setSpeed" && val >= 0 && val <= maxSpeed) { //TODO max speed
       send(Pad::setSpeed(val));
     } else if (cmd == "addSpeed") {
       auto now = QDateTime::currentMSecsSinceEpoch();
@@ -534,7 +538,7 @@ void MainWindow::receivedMessage(int instanceId, QByteArray message) {
         relativeSetSpeed = currentSpeed;
       }
       auto speed = relativeSetSpeed + val;
-      if (speed >= 0 && speed <= 60) {
+      if (speed >= 0 && speed <= maxSpeed) {
         relativeSetSpeed = speed;
         send(Pad::setSpeed(speed));
       }

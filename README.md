@@ -14,3 +14,13 @@ Simple desktop application for controlling the [Kingsmith WalkingpPad](https://w
 - (Maybe) cross-platform, written in C++ with Qt (only tested on Arch Linux with the WalkingPad A1 Pro).
 - *eternal alpha*, contributions welcome
 - Reverse engineered with love
+
+## Build
+
+Dependencies on Arch Linux: `qt5-base`, `qt5-connectivity` and the usual C++ development stuff (let me know if something is missing).
+
+```sh
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=RELEASE
+make -j
+```
