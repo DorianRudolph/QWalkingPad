@@ -1,6 +1,6 @@
 # QWalkingPad
 
-Simple desktop application for controlling the [Kingsmith WalkingpPad](https://walkingpad.com) over BLE (Bluetooth Low Energy).
+Simple desktop application for controlling the [Kingsmith WalkingPad](https://walkingpad.com) over BLE (Bluetooth Low Energy).
 
 ![](screenshot.png)
 
