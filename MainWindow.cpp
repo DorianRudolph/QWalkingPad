@@ -280,7 +280,7 @@ void MainWindow::startDiscovering() {
   deviceDiscoveryAgent->setLowEnergyDiscoveryTimeout(2000);
   connect(deviceDiscoveryAgent, &QBluetoothDeviceDiscoveryAgent::finished, this, &MainWindow::scanFinished);
   connect(deviceDiscoveryAgent, &QBluetoothDeviceDiscoveryAgent::canceled, this, &MainWindow::scanFinished);
-  connect(deviceDiscoveryAgent, QOverload<QBluetoothDeviceDiscoveryAgent::Error>::of(&QBluetoothDeviceDiscoveryAgent::error), this, &MainWindow::scanError);
+  connect(deviceDiscoveryAgent, &QBluetoothDeviceDiscoveryAgent::errorOccurred, this, &MainWindow::scanError);
   connect(deviceDiscoveryAgent, &QBluetoothDeviceDiscoveryAgent::deviceDiscovered, this, &MainWindow::addDevice);
   //TODO handle device updated
   deviceDiscoveryAgent->start(QBluetoothDeviceDiscoveryAgent::LowEnergyMethod);
@@ -364,7 +364,7 @@ void MainWindow::connectDevice() {
   connect(bleController, &QLowEnergyController::discoveryFinished, this, &MainWindow::discoveryFinished);
   connect(bleController, &QLowEnergyController::connected, this, &MainWindow::connected);
   connect(bleController, &QLowEnergyController::disconnected, this, &MainWindow::disconnected);
-  connect(bleController, QOverload<QLowEnergyController::Error>::of(&QLowEnergyController::error), this, &MainWindow::connectError);
+  connect(bleController, &QLowEnergyController::errorOccurred, this, &MainWindow::connectError);
   bleController->connectToDevice();
 }
 
@@ -392,14 +392,14 @@ void MainWindow::serviceDiscovered(const QBluetoothUuid &gatt) {
   qDebug() << "Service discovered" << gatt;
   if (gatt.toUInt16() == 0xfe00) {
     service = bleController->createServiceObject(gatt, bleController);
-    Q_ASSERT(service->state() == QLowEnergyService::DiscoveryRequired);
+    Q_ASSERT(service->state() == QLowEnergyService::RemoteService);
     connect(service, &QLowEnergyService::stateChanged,this, &MainWindow::serviceStateChanged);
     service->discoverDetails();
   }
 }
 
 void MainWindow::serviceStateChanged(QLowEnergyService::ServiceState newState) {
-  if (newState != QLowEnergyService::ServiceDiscovered) return;
+  if (newState != QLowEnergyService::RemoteServiceDiscovered) return;
   connect(service, &QLowEnergyService::characteristicChanged, this, &MainWindow::characteristicChanged);
   auto readChar = service->characteristic(QBluetoothUuid((quint16)0xfe01));
   writeChar = service->characteristic(QBluetoothUuid((quint16)0xfe02));
@@ -407,7 +407,7 @@ void MainWindow::serviceStateChanged(QLowEnergyService::ServiceState newState) {
     qCritical("Characteristics not found");
     handleInvalidService();
   }
-  auto notifyConfig = readChar.descriptor(QBluetoothUuid::ClientCharacteristicConfiguration);
+  auto notifyConfig = readChar.descriptor(QBluetoothUuid::DescriptorType::ClientCharacteristicConfiguration);
   service->writeDescriptor(notifyConfig, QByteArray::fromHex("0100"));
   state = CONNECTED;
   centerWidget->setEnabled(true);
@@ -562,4 +562,3 @@ void MainWindow::receivedMessage(int instanceId, QByteArray message) {
     }
   }
 }
-
