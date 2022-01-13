@@ -416,6 +416,8 @@ void MainWindow::serviceStateChanged(QLowEnergyService::ServiceState newState) {
 }
 
 void MainWindow::sendStart() {
+  if (modeButtons[Pad::MODE_SLEEP]->isChecked())
+    send(Pad::setMode(Pad::MODE_MANUAL));
   send(Pad::start());
   relativeSetTime = QDateTime::currentMSecsSinceEpoch();
   relativeSetSpeed = startSpeedSlider->sliderPosition();
@@ -546,7 +548,7 @@ void MainWindow::receivedMessage(int instanceId, QByteArray message) {
     bool ok;
     int val = args[1].toInt(&ok);
     if (!ok) return;
-    if (cmd == "setSpeed" && val >= 0 && val <= maxSpeed) { //TODO max speed
+    if (cmd == "setSpeed" && val >= 0 && val <= maxSpeed) {
       send(Pad::setSpeed(val));
     } else if (cmd == "addSpeed") {
       auto now = QDateTime::currentMSecsSinceEpoch();

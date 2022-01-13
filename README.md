@@ -17,7 +17,7 @@ Simple desktop application for controlling the [Kingsmith WalkingPad](https://wa
 
 ## Build
 
-Dependencies on Arch Linux: `qt5-base`, `qt5-connectivity` and the usual C++ development stuff (let me know if something is missing).
+Dependencies on Arch Linux: `qt6-base`, `qt6-connectivity` and the usual C++ development stuff (let me know if something is missing).
 
 Clone with `--recursive` or use `git submodule init; git submodule update`.
 
