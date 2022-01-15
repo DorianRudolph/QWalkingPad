@@ -26,3 +26,8 @@ mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=RELEASE
 make -j
 ```
+
+## Related Work
+
+- https://github.com/ph4r05/ph4-walkingpad/
+- https://gitlab.com/pedropombeiro/walkingpad-control
