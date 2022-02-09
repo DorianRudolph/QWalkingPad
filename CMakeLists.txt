@@ -12,7 +12,12 @@ set(QT_VERSION 6)
 set(REQUIRED_LIBS Core Gui Widgets Bluetooth)
 set(REQUIRED_LIBS_QUALIFIED Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Bluetooth)
 
-add_executable(${PROJECT_NAME} main.cpp MainWindow.cpp Protocol.cpp Statistics.cpp)
+set(SRC main.cpp MainWindow.cpp Protocol.cpp Statistics.cpp)
+if (WIN32)
+    add_executable(${PROJECT_NAME} WIN32 ${SRC})
+else()
+    add_executable(${PROJECT_NAME} ${SRC})
+endif()
 
 set(QAPPLICATION_CLASS QApplication CACHE STRING "Inheritance class for SingleApplication")
 set(QT_DEFAULT_MAJOR_VERSION ${QT_VERSION}) # version for SingleApplication
