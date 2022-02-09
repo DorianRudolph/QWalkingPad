@@ -1,3 +1,6 @@
 [submodule "singleapplication"]
 	path = singleapplication
 	url = git@github.com:itay-grudev/SingleApplication.git
+[submodule "QHotkey"]
+	path = QHotkey
+	url = https://github.com/Skycoder42/QHotkey.git

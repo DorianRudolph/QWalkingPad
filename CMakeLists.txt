@@ -16,8 +16,12 @@ add_executable(${PROJECT_NAME} main.cpp MainWindow.cpp Protocol.cpp Statistics.c
 
 set(QAPPLICATION_CLASS QApplication CACHE STRING "Inheritance class for SingleApplication")
 set(QT_DEFAULT_MAJOR_VERSION ${QT_VERSION}) # version for SingleApplication
+
 add_subdirectory(singleapplication)
 target_link_libraries(${PROJECT_NAME} SingleApplication::SingleApplication)
+
+add_subdirectory(QHotkey)
+target_link_libraries(${PROJECT_NAME} qhotkey)
 
 find_package(Qt${QT_VERSION} COMPONENTS ${REQUIRED_LIBS} REQUIRED)
 target_link_libraries(${PROJECT_NAME} ${REQUIRED_LIBS_QUALIFIED})

@@ -32,12 +32,14 @@
 #include <QPushButton>
 #include <QFontDatabase>
 #include <QActionGroup>
+#include <QHotkey>
 
 MainWindow::MainWindow() {
   setWindowTitle("QWalkingPad");
   setupLayout();
   setupMenu();
   setupTimer();
+  setupHotkeys();
   startDiscovering();
 }
 
@@ -555,20 +557,35 @@ void MainWindow::receivedMessage(int instanceId, QByteArray message) {
     if (cmd == "setSpeed" && val >= 0 && val <= maxSpeed) {
       send(Pad::setSpeed(val));
     } else if (cmd == "addSpeed") {
-      auto now = QDateTime::currentMSecsSinceEpoch();
-      if ((now - relativeSetTime) > 5000) {
-        relativeSetSpeed = currentSpeed;
-      }
-      auto speed = relativeSetSpeed + val;
-      if (speed >= 0 && speed <= maxSpeed) {
-        relativeSetSpeed = speed;
-        send(Pad::setSpeed(speed));
-      }
-      relativeSetTime = now;
+      addSpeed(val);
     }
   }
 }
 
+void MainWindow::addSpeed(int s) {
+  auto now = QDateTime::currentMSecsSinceEpoch();
+  if ((now - relativeSetTime) > 5000) {
+    relativeSetSpeed = currentSpeed;
+  }
+  auto speed = relativeSetSpeed + s;
+  if (speed >= 0 && speed <= maxSpeed) {
+    relativeSetSpeed = speed;
+    send(Pad::setSpeed(speed));
+  }
+  relativeSetTime = now;
+}
+
 void MainWindow::closeEvent(QCloseEvent *event) {
   disconnect();
+}
+
+void MainWindow::setupHotkeys() {
+  // TODO make hotkeys configurable
+  auto startKey = new QHotkey(QKeySequence("Meta+\\"), true, this);
+  connect(startKey, &QHotkey::activated, [=]{ if(state == CONNECTED) sendStart(); });
+  constexpr int delta = 5;
+  auto fasterKey = new QHotkey(QKeySequence("Meta+]"), true, this);
+  connect(fasterKey, &QHotkey::activated, [=]{ if(state == CONNECTED) addSpeed(delta); });
+  auto slowerKey = new QHotkey(QKeySequence("Meta+["), true, this);
+  connect(slowerKey, &QHotkey::activated, [=]{ if(state == CONNECTED) addSpeed(-delta); });
 }

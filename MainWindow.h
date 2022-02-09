@@ -74,6 +74,8 @@ private:
   QSlider *makeSpeedSlider();
   void updateStatsLabel();
   void sendStart();
+  void setupHotkeys();
+  void addSpeed(int s);
 
   QLabel *statusLabel;
   QLabel *messageLabel;
