@@ -20,8 +20,6 @@
 #include <singleapplication.h>
 
 int main(int argc, char *argv[]) {
-  //QLoggingCategory::setFilterRules(QStringLiteral("qt.bluetooth* = true"));
-
   QCoreApplication::setOrganizationName("Dorian Rudolph");
   QCoreApplication::setOrganizationDomain("dorianrudolph.com");
   QCoreApplication::setApplicationName("QWalkingPad");

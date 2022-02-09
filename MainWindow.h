@@ -40,6 +40,7 @@ public slots:
 
 protected:
   void showEvent(QShowEvent *event) override;
+  void closeEvent(QCloseEvent *event) override;
 
 private slots:
   void disconnect();
@@ -90,6 +91,8 @@ private:
   QList<QBluetoothDeviceInfo> devices;
   QBluetoothDeviceInfo selectedDevice;
   QBluetoothDeviceDiscoveryAgent *deviceDiscoveryAgent {};
+
+  std::optional<QBluetoothUuid> serviceUuid {};
 
   QList<QRadioButton*> modeButtons {nullptr, nullptr, nullptr};
 

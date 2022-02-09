@@ -359,9 +359,10 @@ void MainWindow::connectDevice() {
     delete bleController;
   }
   service = nullptr;
+  serviceUuid.reset();
   bleController = QLowEnergyController::createCentral(selectedDevice, this);
   connect(bleController, &QLowEnergyController::serviceDiscovered, this, &MainWindow::serviceDiscovered);
-  connect(bleController, &QLowEnergyController::discoveryFinished, this, &MainWindow::discoveryFinished);
+  connect(bleController, &QLowEnergyController::discoveryFinished, this, &MainWindow::discoveryFinished, Qt::QueuedConnection);
   connect(bleController, &QLowEnergyController::connected, this, &MainWindow::connected);
   connect(bleController, &QLowEnergyController::disconnected, this, &MainWindow::disconnected);
   connect(bleController, &QLowEnergyController::errorOccurred, this, &MainWindow::connectError);
@@ -391,10 +392,7 @@ void MainWindow::disconnected() {
 void MainWindow::serviceDiscovered(const QBluetoothUuid &gatt) {
   qDebug() << "Service discovered" << gatt;
   if (gatt.toUInt16() == 0xfe00) {
-    service = bleController->createServiceObject(gatt, bleController);
-    Q_ASSERT(service->state() == QLowEnergyService::RemoteService);
-    connect(service, &QLowEnergyService::stateChanged,this, &MainWindow::serviceStateChanged);
-    service->discoverDetails();
+    serviceUuid = gatt;
   }
 }
 
@@ -471,9 +469,15 @@ void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const 
 
 void MainWindow::discoveryFinished() {
   qDebug() << "Discovery Finished";
-  if (!service) {
+  if (!serviceUuid || !(service = bleController->createServiceObject(*serviceUuid, bleController))){
     handleInvalidService();
+    return;
   }
+
+  Q_ASSERT(service->state() == QLowEnergyService::RemoteService);
+  connect(service, &QLowEnergyService::stateChanged,this, &MainWindow::serviceStateChanged);
+  connect(service, &QLowEnergyService::errorOccurred,this, [](auto x){qWarning() << "Error while discovering details:" << x;});
+  service->discoverDetails();
 }
 
 void MainWindow::connectError(QLowEnergyController::Error error) {
@@ -563,4 +567,8 @@ void MainWindow::receivedMessage(int instanceId, QByteArray message) {
       relativeSetTime = now;
     }
   }
+}
+
+void MainWindow::closeEvent(QCloseEvent *event) {
+  disconnect();
 }
