@@ -17,6 +17,8 @@ Simple desktop application for controlling the [Kingsmith WalkingPad](https://wa
 
 ## Build
 
+### Linux
+
 Dependencies on Arch Linux: `qt6-base`, `qt6-connectivity` and the usual C++ development stuff (let me know if something is missing).
 
 Clone with `--recursive` or use `git submodule init; git submodule update`.
@@ -25,6 +27,21 @@ Clone with `--recursive` or use `git submodule init; git submodule update`.
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=RELEASE
 make -j
+```
+
+### Windows
+
+Prebuilt: https://github.com/DorianRudolph/QWalkingPad/releases/tag/win-0.1
+
+Dependencies: MSVC (or clang-cl) and Qt6.
+
+Use `win` branch. Open "x64 Native Tools Command Prompt for VS 2022", navigate to project directory and run:
+
+```
+mkdir build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Release -G Ninja ..
+ninja
 ```
 
 ## Related Work
