@@ -178,6 +178,12 @@ void MainWindow::setupMenu() {
   autoReconnectAction->setChecked(settings.getAutoReconnect());
   connect(autoReconnectAction, &QAction::triggered, [this](auto checked) {
     settings.setAutoReconnect(checked);
+    if (checked && state == DISCONNECTED) {
+      autoReconnectPaused = false;
+      scheduleReconnect();
+    } else if (!checked && reconnectTimer) {
+      reconnectTimer->stop();
+    }
   });
 
   connectMenu->addSeparator();
@@ -260,6 +266,11 @@ void MainWindow::setupTimer() {
   sendTimer->setInterval(50);
   connect(sendTimer, &QTimer::timeout, this, &MainWindow::handleSend);
   sendTimer->start();
+
+  reconnectTimer = new QTimer(this);
+  reconnectTimer->setSingleShot(true);
+  reconnectTimer->setInterval(5000);
+  connect(reconnectTimer, &QTimer::timeout, this, &MainWindow::retryReconnect);
 }
 
 void MainWindow::handleSend() {
@@ -283,10 +294,14 @@ void MainWindow::startDiscovering() {
   connect(deviceDiscoveryAgent, &QBluetoothDeviceDiscoveryAgent::errorOccurred, this, &MainWindow::scanError);
   connect(deviceDiscoveryAgent, &QBluetoothDeviceDiscoveryAgent::deviceDiscovered, this, &MainWindow::addDevice);
   //TODO handle device updated
-  deviceDiscoveryAgent->start(QBluetoothDeviceDiscoveryAgent::LowEnergyMethod);
+  startScan(false);
 }
 
 void MainWindow::disconnect() {
+  if (!bleController)
+    return;
+  reconnectTimer->stop();
+  autoReconnectPaused = true;
   state = DISCONNECTING;
   bleController->disconnectFromDevice();
   showMessage("Disconnecting...");
@@ -299,6 +314,19 @@ void MainWindow::addDevice(const QBluetoothDeviceInfo &device) {
   if (!(device.coreConfigurations() & QBluetoothDeviceInfo::LowEnergyCoreConfiguration))
     return;
   qDebug() << "Found" << device.name() << device.address();
+
+  auto deviceAddress = device.address().toString();
+  for (auto i = 0; i < devices.size(); ++i) {
+    if (devices[i].address().toString() == deviceAddress) {
+      devices[i] = device;
+      if (state == DISCONNECTED && shouldAutoReconnect() && deviceAddress == settings.getLastUUID()) {
+        selectedDevice = device;
+        connectDevice(true);
+      }
+      return;
+    }
+  }
+
   auto deviceAction = new QAction(device.name() + " (" + device.address().toString() + ")", this);
   deviceAction->setData(devices.size());
   deviceAction->setEnabled(connectionsEnabled);
@@ -318,50 +346,102 @@ void MainWindow::addDevice(const QBluetoothDeviceInfo &device) {
     return a->text() < b->text(); });
   connectMenu->addActions(connectActions);
 
-  if (!autoConnected && settings.getAutoReconnect() && device.address().toString() == settings.getLastUUID()) {
-    autoConnected = true;
+  if (state == DISCONNECTED && shouldAutoReconnect() && deviceAddress == settings.getLastUUID()) {
     selectedDevice = devices.back();
-    connectDevice();
+    connectDevice(true);
   }
 }
 
 void MainWindow::scanFinished() {
   if (state == DISCONNECTED){
-    showMessage("Scan finished");
+    if (shouldAutoReconnect()) {
+      showMessage("Waiting for WalkingPad...");
+      scheduleReconnect();
+    } else {
+      showMessage("Scan finished");
+    }
   }
-  scanAction->setDisabled(false);
+  scanAction->setEnabled(state == DISCONNECTED);
 }
 
 void MainWindow::scanError(QBluetoothDeviceDiscoveryAgent::Error error) {
   auto err = deviceDiscoveryAgent->errorString();
   qCritical() << "Error while scanning for devices" << err;
   showMessage("Scan error: " + err);
+  if (state == DISCONNECTED && shouldAutoReconnect()) {
+    scheduleReconnect();
+  }
 }
 
 void MainWindow::scan() {
+  reconnectTimer->stop();
+  startScan(true);
+}
+
+void MainWindow::startScan(bool clearExistingDevices) {
+  if (clearExistingDevices) {
+    clearDevices();
+  }
+  if (deviceDiscoveryAgent->isActive()) {
+    deviceDiscoveryAgent->stop();
+  }
+  scanAction->setDisabled(true);
+  deviceDiscoveryAgent->start(QBluetoothDeviceDiscoveryAgent::LowEnergyMethod);
+}
+
+void MainWindow::clearDevices() {
   for (auto a : connectActions) {
     connectMenu->removeAction(a);
     delete a;
   }
   devices.clear();
   connectActions.clear();
-  scanAction->setDisabled(true);
-  deviceDiscoveryAgent->start(QBluetoothDeviceDiscoveryAgent::LowEnergyMethod);
 }
 
-void MainWindow::connectDevice() {
+void MainWindow::scheduleReconnect() {
+  if (!shouldAutoReconnect() || state != DISCONNECTED)
+    return;
+  if (!reconnectTimer->isActive())
+    reconnectTimer->start();
+}
+
+bool MainWindow::shouldAutoReconnect() {
+  return !autoReconnectPaused && settings.getAutoReconnect() && !settings.getLastUUID().isEmpty();
+}
+
+void MainWindow::retryReconnect() {
+  if (state != DISCONNECTED || !shouldAutoReconnect())
+    return;
+
+  showMessage("Scanning for WalkingPad...");
+  startScan(false);
+}
+
+void MainWindow::connectDevice(bool automaticReconnect) {
+  if (state == CONNECTING || state == CONNECTED)
+    return;
+
   state = CONNECTING;
+  autoReconnectPaused = false;
+  reconnectingAutomatically = automaticReconnect;
+  reconnectTimer->stop();
+  if (deviceDiscoveryAgent->isActive()) {
+    deviceDiscoveryAgent->stop();
+  }
   sendQueue.clear();
   setConnectActionEnabled(false);
+  scanAction->setDisabled(true);
   disconnectAction->setEnabled(true);
   showMessage("Connecting to " + selectedDevice.name() + " ...");
-  if (!bleController) {
-    delete bleController;
+  if (bleController) {
+    bleController->deleteLater();
+    bleController = nullptr;
   }
   service = nullptr;
+  serviceUuid.reset();
   bleController = QLowEnergyController::createCentral(selectedDevice, this);
   connect(bleController, &QLowEnergyController::serviceDiscovered, this, &MainWindow::serviceDiscovered);
-  connect(bleController, &QLowEnergyController::discoveryFinished, this, &MainWindow::discoveryFinished);
+  connect(bleController, &QLowEnergyController::discoveryFinished, this, &MainWindow::discoveryFinished, Qt::QueuedConnection);
   connect(bleController, &QLowEnergyController::connected, this, &MainWindow::connected);
   connect(bleController, &QLowEnergyController::disconnected, this, &MainWindow::disconnected);
   connect(bleController, &QLowEnergyController::errorOccurred, this, &MainWindow::connectError);
@@ -378,23 +458,29 @@ void MainWindow::connected() {
 
 void MainWindow::disconnected() {
   qDebug("Disconnected");
+  auto reconnect = state != DISCONNECTING && shouldAutoReconnect();
   setConnectActionEnabled(true);
   setStatus("Disconnected");
-  bleController->disconnectFromDevice();
   state = DISCONNECTED;
+  reconnectingAutomatically = false;
+  service = nullptr;
+  serviceUuid.reset();
   centerWidget->setEnabled(false);
   disconnectAction->setEnabled(false);
+  scanAction->setEnabled(true);
   sendQueue.clear();
-  showMessage("");
+  if (reconnect) {
+    showMessage("Disconnected. Reconnecting...");
+    scheduleReconnect();
+  } else {
+    showMessage("");
+  }
 }
 
 void MainWindow::serviceDiscovered(const QBluetoothUuid &gatt) {
   qDebug() << "Service discovered" << gatt;
   if (gatt.toUInt16() == 0xfe00) {
-    service = bleController->createServiceObject(gatt, bleController);
-    Q_ASSERT(service->state() == QLowEnergyService::RemoteService);
-    connect(service, &QLowEnergyService::stateChanged,this, &MainWindow::serviceStateChanged);
-    service->discoverDetails();
+    serviceUuid = gatt;
   }
 }
 
@@ -406,10 +492,12 @@ void MainWindow::serviceStateChanged(QLowEnergyService::ServiceState newState) {
   if (!readChar.isValid() || !writeChar.isValid()) {
     qCritical("Characteristics not found");
     handleInvalidService();
+    return;
   }
   auto notifyConfig = readChar.descriptor(QBluetoothUuid::DescriptorType::ClientCharacteristicConfiguration);
   service->writeDescriptor(notifyConfig, QByteArray::fromHex("0100"));
   state = CONNECTED;
+  reconnectingAutomatically = false;
   centerWidget->setEnabled(true);
   queriedParams = false;
   retrievingRecords = false;
@@ -471,16 +559,24 @@ void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const 
 
 void MainWindow::discoveryFinished() {
   qDebug() << "Discovery Finished";
-  if (!service) {
+  if (!serviceUuid || !(service = bleController->createServiceObject(*serviceUuid, bleController))){
     handleInvalidService();
+    return;
   }
+
+  Q_ASSERT(service->state() == QLowEnergyService::RemoteService);
+  connect(service, &QLowEnergyService::stateChanged,this, &MainWindow::serviceStateChanged);
+  connect(service, &QLowEnergyService::errorOccurred,this, [](auto x){qWarning() << "Error while discovering details:" << x;});
+  service->discoverDetails();
 }
 
 void MainWindow::connectError(QLowEnergyController::Error error) {
   auto err {bleController->errorString()};
   qCritical() << "Error while connecting to " << selectedDevice.name() << err;
   showMessage("Connection error: " + err);
-  QMessageBox::warning(this, "Connection Error", "Error while connecting: " + err + " ");
+  if (state != DISCONNECTING && !reconnectingAutomatically) {
+    QMessageBox::warning(this, "Connection Error", "Error while connecting: " + err + " ");
+  }
   disconnected();
 }
 
@@ -512,7 +608,9 @@ void MainWindow::setConnectActionEnabled(bool enabled) {
 
 void MainWindow::handleInvalidService() {
   qCritical("No WalkingPad Service found");
-  QMessageBox::warning(this, "No WalkingPad Service", selectedDevice.name() + " does not appear to be a WalkingPad. Disconnecting...");
+  if (!reconnectingAutomatically) {
+    QMessageBox::warning(this, "No WalkingPad Service", selectedDevice.name() + " does not appear to be a WalkingPad. Disconnecting...");
+  }
   showMessage("No WalkingPad Service. Disconnecting...");
   bleController->disconnectFromDevice();
 }

@@ -20,6 +20,7 @@
 #include <QBluetoothDeviceInfo>
 #include <QBluetoothDeviceDiscoveryAgent>
 #include <QLowEnergyController>
+#include <optional>
 #include "Settings.h"
 #include "Statistics.h"
 
@@ -57,17 +58,22 @@ private slots:
   void handleSend();
   void setSpeedWidgets(int speed);
   void setStartSpeedWidgets(int speed);
+  void retryReconnect();
 
 private:
   void startDiscovering();
   void setupMenu();
   void scan();
+  void startScan(bool clearExistingDevices);
+  void clearDevices();
+  void scheduleReconnect();
+  bool shouldAutoReconnect();
   void showMessage(const QString &message);
   void setStatus(const QString &status);
   void setupTimer();
   void setConnectActionEnabled(bool enabled);
   void handleInvalidService();
-  void connectDevice();
+  void connectDevice(bool automaticReconnect = false);
   void setupLayout();
   void send(const QByteArray &msg);
   QSlider *makeSpeedSlider();
@@ -91,6 +97,8 @@ private:
   QBluetoothDeviceInfo selectedDevice;
   QBluetoothDeviceDiscoveryAgent *deviceDiscoveryAgent {};
 
+  std::optional<QBluetoothUuid> serviceUuid {};
+
   QList<QRadioButton*> modeButtons {nullptr, nullptr, nullptr};
 
   QLowEnergyController *bleController {};
@@ -99,12 +107,14 @@ private:
 
   QTimer *tickTimer;
   QTimer *sendTimer;
+  QTimer *reconnectTimer {};
   QList<QByteArray> sendQueue;
 
   Settings settings;
 
-  bool autoConnected {}; //only auto connect once
   bool connectionsEnabled {true};
+  bool reconnectingAutomatically {};
+  bool autoReconnectPaused {};
 
   qint64 setModeTime {}; // don't update UI directly after setting
   qint64 setSpeedTime {};
@@ -133,4 +143,3 @@ private:
 
   int maxSpeed {60};
 };
-
