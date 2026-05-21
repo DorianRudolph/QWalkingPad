@@ -424,6 +424,7 @@ void MainWindow::disconnect() {
     return;
   reconnectTimer->stop();
   autoReconnectPaused = true;
+  reconnectRequested = false;
   state = DISCONNECTING;
   bleController->disconnectFromDevice();
   showMessage("Disconnecting...");
@@ -526,7 +527,7 @@ void MainWindow::clearDevices() {
 }
 
 void MainWindow::scheduleReconnect() {
-  if (!shouldAutoReconnect() || state != DISCONNECTED)
+  if ((!shouldAutoReconnect() && !reconnectRequested) || state != DISCONNECTED)
     return;
   if (!reconnectTimer->isActive())
     reconnectTimer->start();
@@ -537,7 +538,7 @@ bool MainWindow::shouldAutoReconnect() {
 }
 
 void MainWindow::retryReconnect() {
-  if (state != DISCONNECTED || !shouldAutoReconnect())
+  if (state != DISCONNECTED || (!shouldAutoReconnect() && !reconnectRequested))
     return;
 
   showMessage("Scanning for WalkingPad...");
@@ -550,7 +551,6 @@ void MainWindow::connectDevice(bool automaticReconnect) {
 
   state = CONNECTING;
   autoReconnectPaused = false;
-  reconnectRequested = false;
   reconnectingAutomatically = automaticReconnect;
   reconnectTimer->stop();
   if (deviceDiscoveryAgent->isActive()) {
@@ -609,7 +609,7 @@ void MainWindow::disconnected() {
     return;
 
   qDebug("Disconnected");
-  auto reconnect = state != DISCONNECTING && shouldAutoReconnect();
+  auto reconnect = state != DISCONNECTING && (shouldAutoReconnect() || reconnectRequested);
   setConnectActionEnabled(true);
   setStatus("Disconnected");
   state = DISCONNECTED;
@@ -640,6 +640,9 @@ void MainWindow::serviceDiscovered(const QBluetoothUuid &gatt) {
 }
 
 void MainWindow::serviceStateChanged(QLowEnergyService::ServiceState newState) {
+  if (sender() != service)
+    return;
+
   if (newState != QLowEnergyService::RemoteServiceDiscovered) return;
   connect(service, &QLowEnergyService::characteristicChanged, this, &MainWindow::characteristicChanged);
   auto readChar = service->characteristic(QBluetoothUuid((quint16)0xfe01));
@@ -652,6 +655,7 @@ void MainWindow::serviceStateChanged(QLowEnergyService::ServiceState newState) {
   auto notifyConfig = readChar.descriptor(QBluetoothUuid::DescriptorType::ClientCharacteristicConfiguration);
   service->writeDescriptor(notifyConfig, QByteArray::fromHex("0100"));
   state = CONNECTED;
+  reconnectRequested = false;
   reconnectingAutomatically = false;
   centerWidget->setEnabled(true);
   queriedParams = false;
@@ -696,6 +700,9 @@ void MainWindow::addSpeed(int speedDelta) {
 }
 
 void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const QByteArray &value){
+  if (sender() != service)
+    return;
+
   if (c.uuid().toUInt16() != 0xfe01) return;
   //qDebug() << "Characteristic Changed" << c.uuid() << value.toHex(' ');
   using namespace Pad;
@@ -806,7 +813,8 @@ void MainWindow::handleInvalidService() {
     QMessageBox::warning(this, "No WalkingPad Service", selectedDevice.name() + " does not appear to be a WalkingPad. Disconnecting...");
   }
   showMessage("No WalkingPad Service. Disconnecting...");
-  bleController->disconnectFromDevice();
+  if (bleController)
+    bleController->disconnectFromDevice();
 }
 
 void MainWindow::updateStatsLabel() {

@@ -90,6 +90,7 @@ void Statistics::load(const QString &path) {
     return;
   }
 
+  stats.clear();
   int lineNo{};
 
   while (!file->atEnd()) {
