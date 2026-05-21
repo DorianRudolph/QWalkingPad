@@ -27,6 +27,7 @@
 class QBluetoothDeviceInfo;
 class QLabel;
 class QLowEnergyController;
+class QSystemTrayIcon;
 class QRadioButton;
 class QSlider;
 class QPushButton;
@@ -41,6 +42,7 @@ public slots:
 
 protected:
   void showEvent(QShowEvent *event) override;
+  void closeEvent(QCloseEvent *event) override;
 
 private slots:
   void disconnect();
@@ -63,6 +65,7 @@ private slots:
 private:
   void startDiscovering();
   void setupMenu();
+  void setupTrayIcon();
   void scan();
   void startScan(bool clearExistingDevices);
   void clearDevices();
@@ -74,11 +77,17 @@ private:
   void setConnectActionEnabled(bool enabled);
   void handleInvalidService();
   void connectDevice(bool automaticReconnect = false);
+  void retireController(QLowEnergyController *controller);
   void setupLayout();
   void send(const QByteArray &msg);
   QSlider *makeSpeedSlider();
   void updateStatsLabel();
+  void updateTrayActions();
   void sendStart();
+  void addSpeed(int speedDelta);
+  void setMode(int mode);
+  void showWindow();
+  void quitApplication();
 
   QLabel *statusLabel;
   QLabel *messageLabel;
@@ -92,6 +101,16 @@ private:
   QMenu *connectMenu;
   QAction *disconnectAction;
   QAction *scanAction;
+  QSystemTrayIcon *trayIcon {};
+  QMenu *trayMenu {};
+  QAction *trayStatusAction {};
+  QAction *trayStartAction {};
+  QAction *traySlowerAction {};
+  QAction *trayFasterAction {};
+  QAction *traySleepAction {};
+  QAction *trayManualAction {};
+  QAction *trayAutoAction {};
+  QAction *trayDisconnectAction {};
   QList<QAction*> connectActions;
   QList<QBluetoothDeviceInfo> devices;
   QBluetoothDeviceInfo selectedDevice;
@@ -115,6 +134,9 @@ private:
   bool connectionsEnabled {true};
   bool reconnectingAutomatically {};
   bool autoReconnectPaused {};
+  bool reconnectRequested {};
+  bool quitting {};
+  bool trayIconWalkingState {};
 
   qint64 setModeTime {}; // don't update UI directly after setting
   qint64 setSpeedTime {};
@@ -132,6 +154,8 @@ private:
   Pad::Statistics::Data currentData {};
   Pad::Statistics stats {};
   int currentSpeed {};
+  int currentMode {2};
+  bool padRunning {};
   QLabel *statsLabel;
 
   bool retrievingRecords {};

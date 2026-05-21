@@ -32,13 +32,50 @@
 #include <QPushButton>
 #include <QFontDatabase>
 #include <QActionGroup>
+#include <QApplication>
+#include <QCloseEvent>
+#include <QIcon>
+#include <QKeySequence>
+#include <QPainter>
+#include <QPixmap>
+#include <QSystemTrayIcon>
+
+namespace {
+QIcon makeTrayIcon(bool walking) {
+  QPixmap pixmap(64, 64);
+  pixmap.fill(Qt::transparent);
+  QPainter painter(&pixmap);
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.setBrush(walking ? QColor(22, 163, 74) : QColor(75, 85, 99));
+  painter.setPen(Qt::NoPen);
+  painter.drawRoundedRect(6, 6, 52, 52, 10, 10);
+  painter.setPen(Qt::white);
+  auto font = painter.font();
+  font.setBold(true);
+  font.setPixelSize(walking ? 28 : 22);
+  painter.setFont(font);
+  painter.drawText(pixmap.rect(), Qt::AlignCenter, walking ? ">" : "WP");
+  return QIcon(pixmap);
+}
+}
 
 MainWindow::MainWindow() {
   setWindowTitle("QWalkingPad");
   setupLayout();
   setupMenu();
+  setupTrayIcon();
   setupTimer();
   startDiscovering();
+}
+
+void MainWindow::closeEvent(QCloseEvent *event) {
+  if (quitting || !trayIcon || !trayIcon->isVisible()) {
+    QMainWindow::closeEvent(event);
+    return;
+  }
+
+  hide();
+  event->ignore();
 }
 
 void MainWindow::showEvent(QShowEvent *event) {
@@ -85,8 +122,7 @@ void MainWindow::setupLayout() {
     hBox->addWidget(button);
     button->setChecked(checked);
     connect(button, &QRadioButton::clicked, this, [this, mode]{
-      setModeTime = QDateTime::currentMSecsSinceEpoch();
-      send(Pad::setMode(mode));
+      setMode(mode);
     });
   };
   addModeButton("Sleep", Pad::MODE_SLEEP, true);
@@ -252,6 +288,92 @@ void MainWindow::setupMenu() {
   statusBar()->addPermanentWidget(statusLabel);
   messageLabel = new QLabel("Scanning...", this);
   statusBar()->addWidget(messageLabel);
+
+  auto quitAction = new QAction("&Quit", this);
+  quitAction->setShortcut(QKeySequence::Quit);
+  quitAction->setShortcutContext(Qt::ApplicationShortcut);
+  addAction(quitAction);
+  connect(quitAction, &QAction::triggered, this, &MainWindow::quitApplication);
+}
+
+void MainWindow::setupTrayIcon() {
+  if (!QSystemTrayIcon::isSystemTrayAvailable())
+    return;
+
+  trayIcon = new QSystemTrayIcon(makeTrayIcon(false), this);
+  trayIcon->setToolTip("QWalkingPad");
+
+  trayMenu = new QMenu(this);
+  auto showAction = trayMenu->addAction("&Show QWalkingPad");
+  connect(showAction, &QAction::triggered, this, &MainWindow::showWindow);
+  trayMenu->addSeparator();
+
+  trayStatusAction = trayMenu->addAction("Disconnected");
+  trayStatusAction->setEnabled(false);
+  trayStartAction = trayMenu->addAction("&Start");
+  connect(trayStartAction, &QAction::triggered, this, &MainWindow::sendStart);
+
+  traySlowerAction = trayMenu->addAction("Slower (-0.5 km/h)");
+  connect(traySlowerAction, &QAction::triggered, this, [this] {
+    addSpeed(-5);
+  });
+  trayFasterAction = trayMenu->addAction("Faster (+0.5 km/h)");
+  connect(trayFasterAction, &QAction::triggered, this, [this] {
+    addSpeed(5);
+  });
+
+  trayMenu->addSeparator();
+  auto modeGroup = new QActionGroup(this);
+  traySleepAction = trayMenu->addAction("&Sleep");
+  trayManualAction = trayMenu->addAction("&Manual");
+  trayAutoAction = trayMenu->addAction("&Auto");
+  for (auto action : {traySleepAction, trayManualAction, trayAutoAction}) {
+    action->setCheckable(true);
+    modeGroup->addAction(action);
+  }
+  connect(traySleepAction, &QAction::triggered, this, [this] {
+    setMode(Pad::MODE_SLEEP);
+  });
+  connect(trayManualAction, &QAction::triggered, this, [this] {
+    setMode(Pad::MODE_MANUAL);
+  });
+  connect(trayAutoAction, &QAction::triggered, this, [this] {
+    setMode(Pad::MODE_AUTO);
+  });
+
+  trayMenu->addSeparator();
+  trayDisconnectAction = trayMenu->addAction("&Disconnect");
+  connect(trayDisconnectAction, &QAction::triggered, this, [this] {
+    if (state == CONNECTED || state == CONNECTING) {
+      disconnect();
+    } else {
+      autoReconnectPaused = false;
+      reconnectRequested = true;
+      for (const auto &device : devices) {
+        if (device.address().toString() == settings.getLastUUID()) {
+          selectedDevice = device;
+          connectDevice(true);
+          return;
+        }
+      }
+      showMessage("Scanning for WalkingPad...");
+      startScan(false);
+    }
+  });
+
+  trayMenu->addSeparator();
+  auto quitAction = trayMenu->addAction("&Quit");
+  connect(quitAction, &QAction::triggered, this, &MainWindow::quitApplication);
+
+  connect(trayIcon, &QSystemTrayIcon::activated, this, [this](auto reason) {
+    if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick) {
+      showWindow();
+    }
+  });
+
+  trayIcon->setContextMenu(trayMenu);
+  trayIcon->show();
+  updateTrayActions();
 }
 
 void MainWindow::setupTimer() {
@@ -308,6 +430,7 @@ void MainWindow::disconnect() {
   if (bleController->state() != QLowEnergyController::ClosingState){
     disconnected();
   }
+  updateTrayActions();
 }
 
 void MainWindow::addDevice(const QBluetoothDeviceInfo &device) {
@@ -319,7 +442,7 @@ void MainWindow::addDevice(const QBluetoothDeviceInfo &device) {
   for (auto i = 0; i < devices.size(); ++i) {
     if (devices[i].address().toString() == deviceAddress) {
       devices[i] = device;
-      if (state == DISCONNECTED && shouldAutoReconnect() && deviceAddress == settings.getLastUUID()) {
+      if (state == DISCONNECTED && (shouldAutoReconnect() || reconnectRequested) && deviceAddress == settings.getLastUUID()) {
         selectedDevice = device;
         connectDevice(true);
       }
@@ -346,7 +469,7 @@ void MainWindow::addDevice(const QBluetoothDeviceInfo &device) {
     return a->text() < b->text(); });
   connectMenu->addActions(connectActions);
 
-  if (state == DISCONNECTED && shouldAutoReconnect() && deviceAddress == settings.getLastUUID()) {
+  if (state == DISCONNECTED && (shouldAutoReconnect() || reconnectRequested) && deviceAddress == settings.getLastUUID()) {
     selectedDevice = devices.back();
     connectDevice(true);
   }
@@ -357,11 +480,15 @@ void MainWindow::scanFinished() {
     if (shouldAutoReconnect()) {
       showMessage("Waiting for WalkingPad...");
       scheduleReconnect();
+    } else if (reconnectRequested) {
+      reconnectRequested = false;
+      showMessage("WalkingPad not found");
     } else {
       showMessage("Scan finished");
     }
   }
   scanAction->setEnabled(state == DISCONNECTED);
+  updateTrayActions();
 }
 
 void MainWindow::scanError(QBluetoothDeviceDiscoveryAgent::Error error) {
@@ -423,6 +550,7 @@ void MainWindow::connectDevice(bool automaticReconnect) {
 
   state = CONNECTING;
   autoReconnectPaused = false;
+  reconnectRequested = false;
   reconnectingAutomatically = automaticReconnect;
   reconnectTimer->stop();
   if (deviceDiscoveryAgent->isActive()) {
@@ -434,7 +562,7 @@ void MainWindow::connectDevice(bool automaticReconnect) {
   disconnectAction->setEnabled(true);
   showMessage("Connecting to " + selectedDevice.name() + " ...");
   if (bleController) {
-    bleController->deleteLater();
+    retireController(bleController);
     bleController = nullptr;
   }
   service = nullptr;
@@ -448,15 +576,38 @@ void MainWindow::connectDevice(bool automaticReconnect) {
   bleController->connectToDevice();
 }
 
+void MainWindow::retireController(QLowEnergyController *controller) {
+  if (!controller)
+    return;
+
+  QObject::disconnect(controller, nullptr, this, nullptr);
+  controller->setParent(nullptr);
+
+  if (controller->state() == QLowEnergyController::UnconnectedState) {
+    controller->deleteLater();
+    return;
+  }
+
+  connect(controller, &QLowEnergyController::disconnected, controller, &QObject::deleteLater);
+  controller->disconnectFromDevice();
+}
+
 void MainWindow::connected() {
+  if (sender() != bleController)
+    return;
+
   qDebug("Connected");
   settings.setLastUUID(selectedDevice.address().toString());
   bleController->discoverServices();
   setStatus("Connected (" + selectedDevice.name() + ")");
   showMessage("");
+  updateTrayActions();
 }
 
 void MainWindow::disconnected() {
+  if (sender() && sender() != bleController)
+    return;
+
   qDebug("Disconnected");
   auto reconnect = state != DISCONNECTING && shouldAutoReconnect();
   setConnectActionEnabled(true);
@@ -475,9 +626,13 @@ void MainWindow::disconnected() {
   } else {
     showMessage("");
   }
+  updateTrayActions();
 }
 
 void MainWindow::serviceDiscovered(const QBluetoothUuid &gatt) {
+  if (sender() != bleController)
+    return;
+
   qDebug() << "Service discovered" << gatt;
   if (gatt.toUInt16() == 0xfe00) {
     serviceUuid = gatt;
@@ -501,14 +656,43 @@ void MainWindow::serviceStateChanged(QLowEnergyService::ServiceState newState) {
   centerWidget->setEnabled(true);
   queriedParams = false;
   retrievingRecords = false;
+  updateTrayActions();
 }
 
 void MainWindow::sendStart() {
+  if (state != CONNECTED)
+    return;
   if (modeButtons[Pad::MODE_SLEEP]->isChecked())
     send(Pad::setMode(Pad::MODE_MANUAL));
   send(Pad::start());
   relativeSetTime = QDateTime::currentMSecsSinceEpoch();
   relativeSetSpeed = startSpeedSlider->sliderPosition();
+}
+
+void MainWindow::setMode(int mode) {
+  if (state != CONNECTED)
+    return;
+
+  setModeTime = QDateTime::currentMSecsSinceEpoch();
+  currentMode = mode;
+  send(Pad::setMode(static_cast<uint8_t>(mode)));
+  updateTrayActions();
+}
+
+void MainWindow::addSpeed(int speedDelta) {
+  if (state != CONNECTED)
+    return;
+
+  auto now = QDateTime::currentMSecsSinceEpoch();
+  if ((now - relativeSetTime) > 5000) {
+    relativeSetSpeed = currentSpeed;
+  }
+  auto speed = relativeSetSpeed + speedDelta;
+  if (speed >= 0 && speed <= maxSpeed) {
+    relativeSetSpeed = speed;
+    send(Pad::setSpeed(speed));
+  }
+  relativeSetTime = now;
 }
 
 void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const QByteArray &value){
@@ -527,12 +711,15 @@ void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const 
         setSpeedWidgets(info->speed);
     }
     currentSpeed = info->speed;
+    currentMode = info->mode;
     currentData.distance = info->distance * 10;
     currentData.duration = info->time;
     currentData.steps = info->steps;
     updateStatsLabel();
     auto s = info->state;
-    startButton->setText(s == 0 || s == 5 ? "Start" : "Stop");
+    padRunning = s != 0 && s != 5;
+    startButton->setText(padRunning ? "Stop" : "Start");
+    updateTrayActions();
   } else if (auto params = std::get_if<Params>(&parsed)) {
     //qDebug("Params: goalType %u, goal %u, regulate %u, maxSpeed %u, startSpeed %u, startMode %u, sensitivity %u, display %x, lock %u, unit %u", params->goalType, params->goal, params->regulate, params->maxSpeed, params->startSpeed, params->startMode, params->sensitivity, params->display, params->lock, params->unit);
     queriedParams = true; // only query params once
@@ -558,6 +745,9 @@ void MainWindow::characteristicChanged(const QLowEnergyCharacteristic &c, const 
 }
 
 void MainWindow::discoveryFinished() {
+  if (sender() != bleController)
+    return;
+
   qDebug() << "Discovery Finished";
   if (!serviceUuid || !(service = bleController->createServiceObject(*serviceUuid, bleController))){
     handleInvalidService();
@@ -571,6 +761,9 @@ void MainWindow::discoveryFinished() {
 }
 
 void MainWindow::connectError(QLowEnergyController::Error error) {
+  if (sender() != bleController)
+    return;
+
   auto err {bleController->errorString()};
   qCritical() << "Error while connecting to " << selectedDevice.name() << err;
   showMessage("Connection error: " + err);
@@ -586,6 +779,7 @@ void MainWindow::showMessage(const QString &message) {
 
 void MainWindow::setStatus(const QString &status) {
   statusLabel->setText(status);
+  updateTrayActions();
 }
 
 void MainWindow::tick() {
@@ -634,6 +828,68 @@ void MainWindow::updateStatsLabel() {
     .arg(dat.distance/1000., w, 'f', 2));
 }
 
+void MainWindow::updateTrayActions() {
+  if (!trayIcon)
+    return;
+
+  auto connected = state == CONNECTED;
+  auto canControl = connected && service;
+  auto speedText = QString("%1 km/h").arg(currentSpeed/10., 0, 'f', 1);
+  auto status = connected ? QString("Connected: %1").arg(speedText) : statusLabel->text();
+  trayStatusAction->setText(status);
+  trayIcon->setToolTip("QWalkingPad - " + status);
+  if (trayIconWalkingState != padRunning) {
+    trayIconWalkingState = padRunning;
+    trayIcon->setIcon(makeTrayIcon(padRunning));
+  }
+
+  trayStartAction->setText(padRunning ? "&Stop" : "&Start");
+  for (auto action : {trayStartAction, traySlowerAction, trayFasterAction,
+       traySleepAction, trayManualAction, trayAutoAction}) {
+    action->setEnabled(canControl);
+  }
+
+  traySleepAction->setChecked(currentMode == Pad::MODE_SLEEP);
+  trayManualAction->setChecked(currentMode == Pad::MODE_MANUAL);
+  trayAutoAction->setChecked(currentMode == Pad::MODE_AUTO);
+
+  if (state == CONNECTED || state == CONNECTING) {
+    trayDisconnectAction->setText("&Disconnect");
+    trayDisconnectAction->setEnabled(bleController);
+  } else {
+    trayDisconnectAction->setText("&Reconnect");
+    trayDisconnectAction->setEnabled(!settings.getLastUUID().isEmpty());
+  }
+}
+
+void MainWindow::showWindow() {
+  show();
+  raise();
+  activateWindow();
+}
+
+void MainWindow::quitApplication() {
+  quitting = true;
+  if (trayIcon)
+    trayIcon->hide();
+  if (!bleController || bleController->state() == QLowEnergyController::UnconnectedState) {
+    QApplication::quit();
+    return;
+  }
+
+  reconnectTimer->stop();
+  state = DISCONNECTING;
+  auto controller = bleController;
+  bleController = nullptr;
+  service = nullptr;
+  QObject::disconnect(controller, nullptr, this, nullptr);
+  controller->setParent(nullptr);
+  connect(controller, &QLowEnergyController::disconnected, controller, &QObject::deleteLater);
+  connect(controller, &QLowEnergyController::disconnected, qApp, &QApplication::quit);
+  controller->disconnectFromDevice();
+  QTimer::singleShot(3000, qApp, &QApplication::quit);
+}
+
 void MainWindow::receivedMessage(int instanceId, QByteArray message) {
   if (state != CONNECTED) return;
   auto args = message.split(' ');
@@ -649,16 +905,7 @@ void MainWindow::receivedMessage(int instanceId, QByteArray message) {
     if (cmd == "setSpeed" && val >= 0 && val <= maxSpeed) {
       send(Pad::setSpeed(val));
     } else if (cmd == "addSpeed") {
-      auto now = QDateTime::currentMSecsSinceEpoch();
-      if ((now - relativeSetTime) > 5000) {
-        relativeSetSpeed = currentSpeed;
-      }
-      auto speed = relativeSetSpeed + val;
-      if (speed >= 0 && speed <= maxSpeed) {
-        relativeSetSpeed = speed;
-        send(Pad::setSpeed(speed));
-      }
-      relativeSetTime = now;
+      addSpeed(val);
     }
   }
 }
