@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=QWalkingPad
+GenericName=QWalkingPad
+Keywords=Utility;
+Exec=/usr/bin/qwalkingpad2
+Terminal=false
+Type=Application
