@@ -6,7 +6,6 @@ Summary:        Desktop Application for the Kingsmith WalkingPad
 Group:          Applications/System
 License:        GPL
 URL:            https://github.com/DorianRudolph/QWalkingPad
-#Source0:        https://github.com/DorianRudolph/QWalkingPad/archive/refs/heads/master.zip
 
 BuildRequires:  cmake gcc gcc-c++ qt6-qtbase-devel qt6-qtconnectivity-devel
 Requires:       qt6-qtbase qt6-qtconnectivity
@@ -15,8 +14,6 @@ Requires:       qt6-qtbase qt6-qtconnectivity
 Qt6-based desktop Application for the Kingsmith WalkingPad, controls speed using BLE.
 
 %prep
-#git submodule init
-#git submodule update
 git clone --recursive %{url}.git
 
 %build
