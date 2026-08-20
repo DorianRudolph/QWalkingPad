@@ -25,7 +25,7 @@ make -j
 tree
 install -m 0755 -d %{buildroot}%{_exec_prefix}/bin/
 install -m 0755 -d %{buildroot}%{_datarootdir}/applications/
-install QWalkingPad/build/qwalkinkpad2 -m 0755 %{buildroot}%{_exec_prefix}/bin/qwalkingpad2
+install QWalkingPad/build/qwalkingpad2 -m 0755 %{buildroot}%{_exec_prefix}/bin/qwalkingpad2
 install QWalkingPad/qwalkingpad2.desktop -m 0644 %{buildroot}%{_datarootdir}/applications/qwalkingpad2.desktop
 
 %clean
